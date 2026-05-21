@@ -23,7 +23,8 @@ import {
   TrendingUp,
   Activity,
   Plus,
-  ShieldAlert
+  ShieldAlert,
+  Loader2
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -33,10 +34,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useOrdersRealtime } from "@/hooks/realtime/use-orders-realtime"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/services/orders/update-order-status"
+import { OrderService } from "@/services/order-service"
 import { Database } from "@/types/database"
 
 type OrderStatus = Database['public']['Enums']['order_status']
@@ -44,11 +49,23 @@ type OrderStatus = Database['public']['Enums']['order_status']
 export default function AdminDashboard() {
   const router = useRouter()
   const { toast } = useToast()
-  const { orders, loading: isLoading } = useOrdersRealtime()
+  const { orders, loading: isLoading, refresh } = useOrdersRealtime()
   const [activeTab, setActiveTab] = React.useState("overview")
   const [isAuthorizing, setIsAuthorizing] = React.useState(true)
   const [configError, setConfigError] = React.useState<string | null>(null)
+  const [isCreatingOrder, setIsCreatingOrder] = React.useState(false)
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false)
+  
   const supabase = createClient()
+
+  // Form state for new order
+  const [newOrder, setNewOrder] = React.useState({
+    name: "",
+    phone: "",
+    email: "",
+    neighborhood: "",
+    value: "115.00"
+  })
 
   React.useEffect(() => {
     async function checkAccess() {
@@ -68,7 +85,6 @@ export default function AdminDashboard() {
       } catch (err: any) {
         console.error("Erro de acesso:", err)
         setConfigError(err.message || "Erro crítico de conexão.")
-        // Se houver erro de config, tentamos ir pro login após 3s se não for erro de config global
         if (!err.message?.includes("configurado")) {
           setTimeout(() => router.push("/admin/login"), 3000)
         }
@@ -108,6 +124,37 @@ export default function AdminDashboard() {
         title: "ERRO OPERACIONAL", 
         description: "Não foi possível sincronizar o status com o banco de dados." 
       })
+    }
+  }
+
+  const handleCreateManualOrder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsCreatingOrder(true)
+    try {
+      await OrderService.createOrder({
+        customerName: newOrder.name,
+        customerPhone: newOrder.phone,
+        customerEmail: newOrder.email,
+        neighborhood: newOrder.neighborhood || "Geral",
+        total_value: parseFloat(newOrder.value)
+      })
+      
+      toast({
+        title: "ORDEM CRIADA",
+        description: "Novo pedido registrado com sucesso na central.",
+      })
+      
+      setIsDialogOpen(false)
+      setNewOrder({ name: "", phone: "", email: "", neighborhood: "", value: "115.00" })
+      refresh()
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "FALHA NA CRIAÇÃO",
+        description: "Erro ao registrar ordem manual no banco de dados.",
+      })
+    } finally {
+      setIsCreatingOrder(false)
     }
   }
 
@@ -200,10 +247,75 @@ export default function AdminDashboard() {
               <p className="text-white/30 uppercase text-[10px] font-black tracking-widest">Sincronizado via Supabase Realtime</p>
             </div>
           </div>
-          <NeonButton variant="green" size="default" className="h-10 text-[10px]">
-            <Plus className="mr-2 h-4 w-4" />
-            NOVA ORDEM
-          </NeonButton>
+          
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <NeonButton variant="green" size="default" className="h-10 text-[10px]">
+                <Plus className="mr-2 h-4 w-4" />
+                NOVA ORDEM
+              </NeonButton>
+            </DialogTrigger>
+            <DialogContent className="glass-morphism border-white/10 text-white rounded-none sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle className="font-impact text-2xl uppercase tracking-wider">REGISTRAR ORDEM MANUAL</DialogTitle>
+                <p className="text-[10px] text-white/40 uppercase font-black tracking-widest">Entrada direta no sistema logístico</p>
+              </DialogHeader>
+              <form onSubmit={handleCreateManualOrder} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase font-black tracking-widest text-white/60">CLIENTE</Label>
+                  <Input 
+                    value={newOrder.name} 
+                    onChange={(e) => setNewOrder({...newOrder, name: e.target.value})}
+                    placeholder="Nome Completo" 
+                    className="bg-white/5 border-white/10 rounded-none text-white h-10"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-white/60">WHATSAPP</Label>
+                    <Input 
+                      value={newOrder.phone} 
+                      onChange={(e) => setNewOrder({...newOrder, phone: e.target.value})}
+                      placeholder="1399..." 
+                      className="bg-white/5 border-white/10 rounded-none text-white h-10"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-black tracking-widest text-white/60">VALOR (R$)</Label>
+                    <Input 
+                      value={newOrder.value} 
+                      onChange={(e) => setNewOrder({...newOrder, value: e.target.value})}
+                      placeholder="115.00" 
+                      className="bg-white/5 border-white/10 rounded-none text-white h-10"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase font-black tracking-widest text-white/60">BAIRRO / ZONA</Label>
+                  <Input 
+                    value={newOrder.neighborhood} 
+                    onChange={(e) => setNewOrder({...newOrder, neighborhood: e.target.value})}
+                    placeholder="Ex: Astúrias" 
+                    className="bg-white/5 border-white/10 rounded-none text-white h-10"
+                    required
+                  />
+                </div>
+                <DialogFooter className="pt-4">
+                  <NeonButton 
+                    type="submit" 
+                    variant="green" 
+                    className="w-full h-12 rounded-none text-[12px]"
+                    disabled={isCreatingOrder}
+                  >
+                    {isCreatingOrder ? <Loader2 className="animate-spin h-5 w-5" /> : "DISPARAR ORDEM"}
+                  </NeonButton>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </header>
 
         <Tabs value={activeTab} className="space-y-10">
@@ -249,7 +361,7 @@ export default function AdminDashboard() {
                   <TableHeader className="bg-white/[0.02]">
                     <TableRow className="border-white/5 hover:bg-transparent">
                       <TableHead className="px-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">OPERADOR / CLIENTE</TableHead>
-                      <TableHead className="text-[10px) font-black uppercase tracking-[0.2em] text-white/40 h-14">ESTADO ATUAL</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">ESTADO ATUAL</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">ZONA OPERACIONAL</TableHead>
                       <TableHead className="text-right px-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">VALOR LÍQUIDO</TableHead>
                     </TableRow>
