@@ -25,6 +25,7 @@ import {
   Plus
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
+import { NeonButton } from "@/components/ui/neon-button"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -266,7 +267,6 @@ export default function AdminDashboard() {
                 <p className="text-white/40 uppercase text-xs font-black tracking-widest">Gerenciamento completo da frota e entregas</p>
               </CardHeader>
               <CardContent className="p-0">
-                 {/* Reutilizando a tabela com mais detalhes para a aba de logística se necessário */}
                  <div className="p-8 text-center border-t border-white/5">
                     <p className="text-white/20 font-impact text-2xl uppercase opacity-50">SISTEMA DE FILTROS AVANÇADOS EM DESENVOLVIMENTO</p>
                  </div>
