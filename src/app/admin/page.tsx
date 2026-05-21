@@ -22,7 +22,8 @@ import {
   Truck, 
   TrendingUp,
   Activity,
-  Plus
+  Plus,
+  ShieldAlert
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -31,6 +32,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
 import { useOrdersRealtime } from "@/hooks/realtime/use-orders-realtime"
 import { createClient } from "@/lib/supabase/client"
@@ -45,19 +47,35 @@ export default function AdminDashboard() {
   const { orders, loading: isLoading } = useOrdersRealtime()
   const [activeTab, setActiveTab] = React.useState("overview")
   const [isAuthorizing, setIsAuthorizing] = React.useState(true)
+  const [configError, setConfigError] = React.useState<string | null>(null)
   const supabase = createClient()
 
   React.useEffect(() => {
     async function checkAccess() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        router.push("/admin/login")
-        return
+      try {
+        if (!supabase || !supabase.auth) {
+          throw new Error("Supabase não configurado corretamente.")
+        }
+
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error || !session) {
+          router.push("/admin/login")
+          return
+        }
+        
+        setIsAuthorizing(false)
+      } catch (err: any) {
+        console.error("Erro de acesso:", err)
+        setConfigError(err.message || "Erro crítico de conexão.")
+        // Se houver erro de config, tentamos ir pro login após 3s se não for erro de config global
+        if (!err.message?.includes("configurado")) {
+          setTimeout(() => router.push("/admin/login"), 3000)
+        }
       }
-      setIsAuthorizing(false)
     }
     checkAccess()
-  }, [router, supabase.auth])
+  }, [router, supabase])
 
   const stats = React.useMemo(() => {
     return {
@@ -70,7 +88,9 @@ export default function AdminDashboard() {
   }, [orders])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    if (supabase?.auth) {
+      await supabase.auth.signOut()
+    }
     router.push("/admin/login")
     router.refresh()
   }
@@ -89,6 +109,23 @@ export default function AdminDashboard() {
         description: "Não foi possível sincronizar o status com o banco de dados." 
       })
     }
+  }
+
+  if (configError) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background p-6">
+        <Alert variant="destructive" className="max-w-md bg-destructive/10 border-destructive/20 text-white">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertTitle className="font-impact uppercase">ERRO DE CONFIGURAÇÃO</AlertTitle>
+          <AlertDescription className="text-xs uppercase font-bold mt-2">
+            {configError}. Verifique as variáveis de ambiente no painel da Vercel ou no arquivo .env.local.
+          </AlertDescription>
+          <NeonButton variant="blue" onClick={() => window.location.reload()} className="w-full mt-4 h-10 text-[10px]">
+            TENTAR NOVAMENTE
+          </NeonButton>
+        </Alert>
+      </div>
+    )
   }
 
   if (isAuthorizing) {
@@ -212,7 +249,7 @@ export default function AdminDashboard() {
                   <TableHeader className="bg-white/[0.02]">
                     <TableRow className="border-white/5 hover:bg-transparent">
                       <TableHead className="px-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">OPERADOR / CLIENTE</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">ESTADO ATUAL</TableHead>
+                      <TableHead className="text-[10px) font-black uppercase tracking-[0.2em] text-white/40 h-14">ESTADO ATUAL</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">ZONA OPERACIONAL</TableHead>
                       <TableHead className="text-right px-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/40 h-14">VALOR LÍQUIDO</TableHead>
                     </TableRow>
