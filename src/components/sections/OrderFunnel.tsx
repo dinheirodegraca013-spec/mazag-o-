@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { NeonButton } from "@/components/ui/neon-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { generatePersonalizedWhatsAppOrderMessage } from "@/ai/flows/personalized-whatsapp-order-message-flow"
-import { OrderService } from "@/services/order-service"
+import { createOrder } from "@/services/order-service"
 import { CheckCircle2, Loader2, Send, MessageCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -38,8 +38,8 @@ export function OrderFunnel() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Salvar no Banco de Dados (Supabase)
-      await OrderService.createOrder({
+      // 1. Salvar no Banco de Dados (Supabase Server Action)
+      await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,

@@ -41,7 +41,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useOrdersRealtime } from "@/hooks/realtime/use-orders-realtime"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/services/orders/update-order-status"
-import { OrderService } from "@/services/order-service"
+import { createOrder } from "@/services/order-service"
 import { Database } from "@/types/database"
 
 type OrderStatus = Database['public']['Enums']['order_status']
@@ -130,12 +130,13 @@ export default function AdminDashboard() {
     e.preventDefault()
     setIsCreatingOrder(true)
     try {
-      await OrderService.createOrder({
+      await createOrder({
         customerName: newOrder.name,
         customerPhone: newOrder.phone,
         customerEmail: newOrder.email,
         neighborhood: newOrder.neighborhood || "Geral",
-        total_value: parseFloat(newOrder.value)
+        total_value: parseFloat(newOrder.value),
+        isAdminAction: true
       })
       
       toast({
