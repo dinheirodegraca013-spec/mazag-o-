@@ -22,6 +22,7 @@ export function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
+    // Retorna um proxy vazio para evitar erros de inicialização durante o build ou falta de env
     return {} as ReturnType<typeof createBrowserClient<Database>>
   }
 
