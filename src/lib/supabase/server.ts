@@ -13,7 +13,7 @@ const isValidUrl = (url: string | undefined): url is string => {
 }
 
 /**
- * Server-side Supabase Client para SSR.
+ * Server-side Supabase Client para SSR com Mock Fallback.
  */
 export async function createClient() {
   const cookieStore = await cookies()
@@ -21,7 +21,32 @@ export async function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
-    return null as any
+    // Mock para evitar erros de servidor durante o protótipo
+    return {
+      auth: {
+        getUser: async () => ({ data: { user: null }, error: null }),
+        getSession: async () => ({ data: { session: null }, error: null }),
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: null, error: null }),
+            maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          }),
+          order: () => Promise.resolve({ data: [], error: null }),
+        }),
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ 
+              data: { id: 'mock-' + Math.random().toString(36).substr(2, 9), status: 'pending' }, 
+              error: null 
+            })
+          })
+        }),
+        rpc: () => Promise.resolve({ data: null, error: null })
+      }),
+      rpc: () => Promise.resolve({ data: null, error: null })
+    } as any
   }
 
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {

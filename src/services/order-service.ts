@@ -1,4 +1,3 @@
-
 'use server'
 
 import { createClient } from "@/lib/supabase/server"
@@ -15,7 +14,7 @@ export type Order = Database['public']['Tables']['orders']['Row'] & {
 
 /**
  * Registra um novo pedido no sistema.
- * Refatorado como Server Action nomeada para compatibilidade com Next.js 15.
+ * Suporta Modo Real (Supabase) e Modo de Demonstração (Fallback).
  */
 export async function createOrder(orderData: {
   customerName: string
@@ -28,11 +27,7 @@ export async function createOrder(orderData: {
   // 1. Inicializa Supabase (Admin para bypass ou Server para contexto de usuário)
   const supabase = orderData.isAdminAction ? supabaseAdmin : await createClient()
 
-  if (!supabase) {
-    throw new Error("Sistema de banco de dados não inicializado. Verifique as configurações.")
-  }
-
-  // 2. Tenta encontrar o usuário pelo email
+  // 2. Tenta encontrar o usuário pelo email (Opcional)
   let userId = null
   try {
     const { data: user, error: userError } = await supabase
@@ -56,7 +51,7 @@ export async function createOrder(orderData: {
     neighborhood: orderData.neighborhood || "Geral"
   }
 
-  // 4. Executa a inserção
+  // 4. Executa a inserção (ou Simulação se o banco não estiver configurado)
   const { data, error } = await supabase
     .from('orders')
     .insert(insertData)
@@ -64,12 +59,7 @@ export async function createOrder(orderData: {
     .single()
 
   if (error) {
-    console.error("Supabase Order Error:", {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint
-    })
+    console.error("Supabase Order Error:", error)
     throw new Error(`Falha no banco de dados: ${error.message}`)
   }
   
