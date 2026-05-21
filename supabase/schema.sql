@@ -1,115 +1,64 @@
+-- 1. TIPOS E ENUMS
+CREATE TYPE public.app_role AS ENUM ('admin', 'manager', 'operator', 'user');
+CREATE TYPE public.order_status AS ENUM ('pending', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled');
 
--- ARQUITETURA ENTERPRISE MAZAGÃO GÁS
-
--- 1. TABELA DE PRODUTOS
-CREATE TABLE products (
+-- 2. TABELA DE USUÁRIOS (Sincronizada com Auth)
+CREATE TABLE public.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  description TEXT,
-  price DECIMAL(10,2) NOT NULL,
-  category TEXT DEFAULT 'silver_premium',
-  stock_quantity INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- 2. TABELA DE CLIENTES (CRM)
-CREATE TABLE customers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  full_name TEXT NOT NULL,
-  phone TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE,
-  address_street TEXT,
-  address_neighborhood TEXT,
-  last_purchase_date TIMESTAMPTZ,
-  avg_consumption_days INTEGER DEFAULT 30,
+  auth_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  role public.app_role DEFAULT 'user',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- 3. TABELA DE PEDIDOS
-CREATE TYPE order_status AS ENUM ('Pendente', 'Em Rota', 'Entregue', 'Cancelado');
-
-CREATE TABLE orders (
+CREATE TABLE public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID REFERENCES customers(id),
-  product_id UUID REFERENCES products(id),
-  status order_status DEFAULT 'Pendente',
-  total_value DECIMAL(10,2) NOT NULL,
-  neighborhood TEXT NOT NULL,
-  payment_method TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- 4. HISTÓRICO DE STATUS (AUDITORIA)
-CREATE TABLE order_status_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-  old_status order_status,
-  new_status order_status,
-  changed_by UUID, -- Link com Supabase Auth User ID
+  customer_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  status public.order_status DEFAULT 'pending',
+  total_value DECIMAL(10,2) NOT NULL DEFAULT 115.00,
+  neighborhood TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 5. TRACKING & ANALYTICS (HEATMAPS & BEHAVIOR)
-CREATE TABLE tracking_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id TEXT NOT NULL,
-  event_type TEXT NOT NULL, -- 'click', 'scroll', 'conversion'
-  page_path TEXT NOT NULL,
-  element_id TEXT,
-  payload JSONB,
-  utm_source TEXT,
-  utm_medium TEXT,
-  utm_campaign TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+-- 4. HABILITAR REALTIME
+ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
 
--- 6. AI & MARKETING LOGS
-CREATE TABLE ai_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  feature TEXT NOT NULL, -- 'predictive_reorder', 'marketing_content'
-  input_data JSONB,
-  output_data JSONB,
-  success BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+-- 5. FUNÇÕES DE SEGURANÇA (RBAC)
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS public.app_role AS $$
+  SELECT role FROM public.users WHERE auth_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER;
 
--- 7. WHATSAPP LOGS
-CREATE TABLE whatsapp_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID REFERENCES customers(id),
-  message_content TEXT NOT NULL,
-  direction TEXT CHECK (direction IN ('inbound', 'outbound')),
-  status TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT role = 'admin' FROM public.users WHERE auth_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER;
 
--- ROW LEVEL SECURITY (RLS) POLICIES
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tracking_events ENABLE ROW LEVEL SECURITY;
+-- 6. POLÍTICAS DE ACESSO (RLS)
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- Políticas para Admin (Exemplo)
-CREATE POLICY "Admins have full access to orders" ON orders
-  FOR ALL TO authenticated
-  USING (auth.jwt() ->> 'role' = 'service_role' OR true); -- Simplificado para protótipo
+-- Política de Usuários: Admins veem tudo, usuários veem a si mesmos
+CREATE POLICY "Admins podem ver todos os usuários" ON public.users FOR SELECT USING (is_admin());
+CREATE POLICY "Usuários podem ver seu próprio perfil" ON public.users FOR SELECT USING (auth.uid() = auth_id);
 
--- ÍNDICES PARA PERFORMANCE
-CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_customers_phone ON customers(phone);
-CREATE INDEX idx_tracking_session ON tracking_events(session_id);
+-- Política de Pedidos: Público pode inserir, Admins gerenciam, Usuários veem os seus
+CREATE POLICY "Qualquer um pode iniciar um pedido" ON public.orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Admins podem gerenciar todos os pedidos" ON public.orders FOR ALL USING (is_admin());
+CREATE POLICY "Usuários veem seus próprios pedidos" ON public.orders FOR SELECT USING (auth.uid() = customer_id);
 
--- TRIGGER PARA ATUALIZAR TIMESTAMP
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+-- 7. TRIGGER: CRIAR PERFIL AUTOMÁTICO NO SIGNUP
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
+  INSERT INTO public.users (auth_id, email, full_name, role)
+  VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'full_name', 'user');
+  RETURN NEW;
 END;
-$$ language 'plpypgsql';
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE TRIGGER update_orders_modtime
-BEFORE UPDATE ON orders
-FOR EACH ROW
-EXECUTE PROCEDURE update_updated_at_column();
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
