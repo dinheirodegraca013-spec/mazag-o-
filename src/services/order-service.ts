@@ -5,15 +5,6 @@ import { createClient } from "@/lib/supabase/server"
 import { supabaseAdmin } from "@/lib/supabase/admin"
 import { Database } from "@/types/database"
 
-export type Order = Database['public']['Tables']['orders']['Row'] & {
-  customer?: Database['public']['Tables']['customers']['Row'] | null
-  user?: Database['public']['Tables']['users']['Row'] | null
-}
-
-/**
- * Cria ou busca um cliente e registra um novo pedido.
- * Alinhado com o novo esquema: public.customers -> public.orders.
- */
 export async function createOrder(orderData: {
   customerName: string
   customerPhone: string
@@ -22,12 +13,12 @@ export async function createOrder(orderData: {
   total?: number
   isAdminAction?: boolean
 }) {
-  const supabase = orderData.isAdminAction ? supabaseAdmin : await createClient()
+  const supabase = (orderData.isAdminAction && supabaseAdmin) ? supabaseAdmin : await createClient()
 
   try {
-    // 1. Identificar ou Criar Cliente (Prioridade por Telefone)
+    // 1. Identificar ou Criar Cliente
     let customerId = null
-    const { data: customer, error: customerFetchError } = await supabase
+    const { data: customer } = await supabase
       .from('customers')
       .select('id')
       .or(`phone.eq.${orderData.customerPhone},email.eq.${orderData.customerEmail}`)
@@ -59,7 +50,7 @@ export async function createOrder(orderData: {
         status: 'pending',
         total: orderData.total || 115.00,
         subtotal: orderData.total || 115.00,
-        notes: orderData.notes || 'Pedido web padrão'
+        notes: orderData.notes || 'Pedido operacional Mazagão'
       })
       .select()
       .single()
@@ -68,7 +59,7 @@ export async function createOrder(orderData: {
     
     return order
   } catch (error: any) {
-    console.error("Falha na criação da ordem operacional:", error)
-    throw new Error(error.message || "Erro crítico ao registrar ordem no banco.")
+    console.error("Falha na criação da ordem:", error)
+    throw new Error(error.message || "Erro ao registrar no Supabase.")
   }
 }
