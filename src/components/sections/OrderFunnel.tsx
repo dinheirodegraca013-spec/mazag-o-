@@ -38,35 +38,31 @@ export function OrderFunnel() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Salvar no Banco de Dados (Supabase Server Action)
+      // 1. Registrar no novo esquema (Customer -> Order)
       await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,
-        neighborhood: "Identificando...",
-        total_value: 115.00
+        notes: "Pedido captado via Site Mazagão",
+        total: 115.00
       })
 
-      // 2. Gerar mensagem (com Fallback caso a IA falhe)
-      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu telefone é ${values.phone} e meu e-mail é ${values.email}. Gostaria de pedir um P13 Prata.`
-      
+      // 2. IA para Personalização
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}. Gostaria de pedir um P13 Prata.`
       try {
         const response = await generatePersonalizedWhatsAppOrderMessage({
           customerName: values.name,
           customerPhone: values.phone,
           customerEmail: values.email,
-          productName: "P13 Prata (Padrão)"
+          productName: "P13 Prata"
         })
-        if (response?.whatsappMessage) {
-          finalMessage = response.whatsappMessage
-        }
-      } catch (aiError) {
-        console.warn("IA indisponível ou API Key inválida. Usando mensagem padrão.", aiError)
+        if (response?.whatsappMessage) finalMessage = response.whatsappMessage
+      } catch (e) {
+        console.warn("Usando fallback padrão.")
       }
 
-      const phone = "5513996253286"
       const encodedMsg = encodeURIComponent(finalMessage)
-      const url = `https://wa.me/${phone}?text=${encodedMsg}`
+      const url = `https://wa.me/5513996253286?text=${encodedMsg}`
       
       setWhatsappUrl(url)
       setIsSuccess(true)
@@ -75,12 +71,11 @@ export function OrderFunnel() {
         window.location.assign(url)
       }, 1500)
 
-    } catch (error) {
-      console.error("Erro ao processar pedido:", error)
+    } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Erro na central de comando",
-        description: "Não conseguimos processar seu pedido agora. Verifique a conexão e tente novamente."
+        title: "ERRO DE CONEXÃO",
+        description: error.message || "Tente novamente em alguns instantes."
       })
     } finally {
       setIsSubmitting(false)
@@ -91,129 +86,53 @@ export function OrderFunnel() {
     <section id="order-form" className="py-24 container px-4">
       <div className="grid lg:grid-cols-2 gap-12 items-center">
         <div className="space-y-6">
-          <h2 className="font-impact text-7xl text-white tracking-tight uppercase leading-[0.85]">
+          <h2 className="font-impact text-7xl text-white uppercase leading-[0.85]">
             MÁQUINA DE <br/><span className="text-primary neon-text-green">PEDIDOS ATIVA</span>
           </h2>
           <p className="text-xl text-white/70 max-w-md font-light">
-            Preencha os dados abaixo e seja redirecionado para nossa central oficial. 
-            Seu pedido será registrado automaticamente em nosso sistema.
+            Seu pedido será registrado automaticamente em nossa central operacional de alta performance.
           </p>
-          <ul className="space-y-4">
-            {[
-              "Pedido registrado no sistema operacional",
-              "Sem espera no telefone",
-              "Pagamento via PIX ou Cartão",
-              "Atendimento prioritário Guarujá"
-            ].map((text, i) => (
-              <li key={i} className="flex items-center gap-3 text-white/90 font-bold uppercase text-sm tracking-widest">
-                <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center border border-primary/40">
-                  <div className="h-2 w-2 rounded-full bg-primary shadow-neon-green" />
-                </div>
-                {text}
-              </li>
-            ))}
-          </ul>
         </div>
 
-        <Card className="glass-morphism border-primary/20 relative overflow-hidden group shadow-2xl">
-          <div className="absolute top-0 left-0 w-full h-1 bg-primary/40 blur-sm animate-scan z-20" />
-          
+        <Card className="glass-morphism border-primary/20 relative overflow-hidden group shadow-2xl rounded-none">
+          <div className="absolute top-0 left-0 w-full h-1 bg-primary/40 animate-scan z-20" />
           <CardHeader className="pb-8">
-            <CardTitle className="font-impact text-4xl text-white uppercase tracking-wider">
-              {isSuccess ? "SOLICITAÇÃO REGISTRADA" : "INICIAR PEDIDO AGORA"}
-            </CardTitle>
-            <CardDescription className="text-white/40 uppercase text-[10px] tracking-[0.3em] font-black">
-              {isSuccess ? "REDIRECIONANDO PARA A CENTRAL..." : "CENTRAL DE COMANDO MAZAGÃO"}
-            </CardDescription>
+            <CardTitle className="font-impact text-4xl text-white uppercase">{isSuccess ? "REGISTRADO" : "PEDIR AGORA"}</CardTitle>
+            <CardDescription className="text-white/40 uppercase text-[10px] tracking-[0.3em] font-black">SISTEMA INTEGRADO MAZAGÃO</CardDescription>
           </CardHeader>
           <CardContent>
             {isSuccess ? (
-              <div className="py-12 flex flex-col items-center justify-center text-center space-y-6">
-                <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary animate-pulse shadow-neon-green">
-                  <CheckCircle2 className="h-12 w-12 text-primary" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-3xl font-impact text-white uppercase tracking-tighter">PEDIDO SALVO!</h3>
-                  <p className="text-white/60 text-sm font-bold uppercase tracking-widest">Aguarde o link oficial...</p>
-                </div>
-                
-                <div className="w-full pt-6">
-                  <NeonButton 
-                    className="w-full h-16" 
-                    variant="green" 
-                    onClick={() => window.location.assign(whatsappUrl)}
-                  >
-                    <MessageCircle className="mr-3 h-6 w-6" />
-                    ABRIR WHATSAPP
-                  </NeonButton>
-                </div>
+              <div className="py-12 flex flex-col items-center text-center space-y-6">
+                <CheckCircle2 className="h-16 w-16 text-primary animate-bounce" />
+                <h3 className="text-3xl font-impact text-white">REDIRECIONANDO...</h3>
+                <NeonButton className="w-full h-16" variant="green" onClick={() => window.location.assign(whatsappUrl)}><MessageCircle className="mr-2" /> ABRIR WHATSAPP</NeonButton>
               </div>
             ) : (
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white/80 uppercase text-[10px] tracking-[0.2em] font-black">NOME COMPLETO</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Seu Nome" 
-                            className="bg-white text-black h-14 font-bold border-none rounded-sm placeholder:text-black/40" 
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs font-bold uppercase" />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white/80 uppercase text-[10px] tracking-[0.2em] font-black">WHATSAPP</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="1399..." 
-                            className="bg-white text-black h-14 font-bold border-none rounded-sm placeholder:text-black/40" 
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs font-bold uppercase" />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white/80 uppercase text-[10px] tracking-[0.2em] font-black">E-MAIL</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="email@exemplo.com" 
-                            className="bg-white text-black h-14 font-bold border-none rounded-sm placeholder:text-black/40" 
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs font-bold uppercase" />
-                      </FormItem>
-                    )}
-                  />
-                  <NeonButton 
-                    type="submit" 
-                    className="w-full h-16 rounded-sm" 
-                    variant="green" 
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <Loader2 className="mr-3 h-6 w-6 animate-spin" />
-                    ) : (
-                      <Send className="mr-3 h-6 w-6" />
-                    )}
-                    FINALIZAR PEDIDO
+                  <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white/80 uppercase text-[10px] font-black">NOME COMPLETO</FormLabel>
+                      <FormControl><Input placeholder="Seu Nome" className="bg-white text-black h-14 font-bold border-none rounded-none" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="phone" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white/80 uppercase text-[10px] font-black">WHATSAPP</FormLabel>
+                      <FormControl><Input placeholder="1399..." className="bg-white text-black h-14 font-bold border-none rounded-none" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white/80 uppercase text-[10px] font-black">E-MAIL</FormLabel>
+                      <FormControl><Input placeholder="email@exemplo.com" className="bg-white text-black h-14 font-bold border-none rounded-none" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <NeonButton type="submit" className="w-full h-16 rounded-none" variant="green" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Send className="mr-2" />} FINALIZAR PEDIDO
                   </NeonButton>
                 </form>
               </Form>

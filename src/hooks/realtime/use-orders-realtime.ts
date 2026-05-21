@@ -6,16 +6,15 @@ import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database'
 
 type Order = Database['public']['Tables']['orders']['Row'] & {
-  users?: {
-    full_name: string | null
+  customer?: {
+    name: string | null
     phone: string | null
     email: string | null
-  }
+  } | null
 }
 
 /**
- * Realtime Orders Hook.
- * Depends strictly on PostgreSQL RLS.
+ * Realtime Orders Hook atualizado para o novo esquema.
  */
 export function useOrdersRealtime() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -29,12 +28,12 @@ export function useOrdersRealtime() {
       .from('orders')
       .select(`
         *,
-        users:customer_id (full_name, phone, email)
+        customer:customer_id (name, phone, email)
       `)
       .order('created_at', { ascending: false })
 
     if (!error && data) {
-      setOrders(data as Order[])
+      setOrders(data as unknown as Order[])
     }
     setLoading(false)
   }, [supabase])
@@ -45,7 +44,7 @@ export function useOrdersRealtime() {
     fetchOrders()
 
     const channel = supabase
-      .channel('realtime-orders')
+      .channel('realtime-orders-global')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },

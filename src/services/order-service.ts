@@ -1,3 +1,4 @@
+
 'use server'
 
 import { createClient } from "@/lib/supabase/server"
@@ -5,63 +6,69 @@ import { supabaseAdmin } from "@/lib/supabase/admin"
 import { Database } from "@/types/database"
 
 export type Order = Database['public']['Tables']['orders']['Row'] & {
-  users?: {
-    full_name: string | null
-    phone: string | null
-    email: string | null
-  }
+  customer?: Database['public']['Tables']['customers']['Row'] | null
+  user?: Database['public']['Tables']['users']['Row'] | null
 }
 
 /**
- * Registra um novo pedido no sistema.
- * Suporta Modo Real (Supabase) e Modo de Demonstração (Fallback).
+ * Cria ou busca um cliente e registra um novo pedido.
+ * Alinhado com o novo esquema: public.customers -> public.orders.
  */
 export async function createOrder(orderData: {
   customerName: string
   customerPhone: string
   customerEmail: string
-  neighborhood: string
-  total_value?: number
+  notes?: string
+  total?: number
   isAdminAction?: boolean
 }) {
-  // 1. Inicializa Supabase (Admin para bypass ou Server para contexto de usuário)
   const supabase = orderData.isAdminAction ? supabaseAdmin : await createClient()
 
-  // 2. Tenta encontrar o usuário pelo email (Opcional)
-  let userId = null
   try {
-    const { data: user, error: userError } = await supabase
-      .from('users')
+    // 1. Identificar ou Criar Cliente (Prioridade por Telefone)
+    let customerId = null
+    const { data: customer, error: customerFetchError } = await supabase
+      .from('customers')
       .select('id')
-      .eq('email', orderData.customerEmail)
+      .or(`phone.eq.${orderData.customerPhone},email.eq.${orderData.customerEmail}`)
       .maybeSingle()
-    
-    if (!userError && user) {
-      userId = user.id
+
+    if (customer) {
+      customerId = customer.id
+    } else {
+      const { data: newCustomer, error: customerInsertError } = await supabase
+        .from('customers')
+        .insert({
+          name: orderData.customerName,
+          phone: orderData.customerPhone,
+          email: orderData.customerEmail,
+          notes: 'Cliente captado via site'
+        })
+        .select('id')
+        .single()
+      
+      if (customerInsertError) throw customerInsertError
+      customerId = newCustomer.id
     }
-  } catch (e) {
-    console.warn("Aviso: Falha ao buscar usuário, prosseguindo com pedido anônimo.", e)
-  }
 
-  // 3. Dados de Inserção
-  const insertData = {
-    customer_id: userId,
-    status: 'pending' as const,
-    total_value: orderData.total_value || 115.00,
-    neighborhood: orderData.neighborhood || "Geral"
-  }
+    // 2. Criar o Pedido
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        customer_id: customerId,
+        status: 'pending',
+        total: orderData.total || 115.00,
+        subtotal: orderData.total || 115.00,
+        notes: orderData.notes || 'Pedido web padrão'
+      })
+      .select()
+      .single()
 
-  // 4. Executa a inserção (ou Simulação se o banco não estiver configurado)
-  const { data, error } = await supabase
-    .from('orders')
-    .insert(insertData)
-    .select()
-    .single()
-
-  if (error) {
-    console.error("Supabase Order Error:", error)
-    throw new Error(`Falha no banco de dados: ${error.message}`)
+    if (orderError) throw orderError
+    
+    return order
+  } catch (error: any) {
+    console.error("Falha na criação da ordem operacional:", error)
+    throw new Error(error.message || "Erro crítico ao registrar ordem no banco.")
   }
-  
-  return data
 }
