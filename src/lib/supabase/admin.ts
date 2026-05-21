@@ -17,7 +17,7 @@ const isValidUrl = (url: string | undefined): url is string => {
 /**
  * Admin Client (Server-side only).
  * Utilizado para operações que ignoram RLS.
- * Protegido por variáveis de ambiente. NUNCA coloque chaves fixas aqui.
+ * Protegido por variáveis de ambiente.
  */
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

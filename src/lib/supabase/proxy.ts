@@ -2,9 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 import { Database } from '@/types/database'
 
-/**
- * Validador de URL para evitar crashes no Edge Runtime (Middleware).
- */
 const isValidUrl = (url: string | undefined): url is string => {
   if (!url) return false
   try {
@@ -16,8 +13,7 @@ const isValidUrl = (url: string | undefined): url is string => {
 }
 
 /**
- * Enterprise Session Proxy for Middleware.
- * Garante o refresh da sessão no Edge Runtime de forma resiliente.
+ * Proxy para gerenciamento de sessão no Middleware.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
@@ -54,7 +50,6 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Força o refresh da sessão
   await supabase.auth.getUser()
 
   return response

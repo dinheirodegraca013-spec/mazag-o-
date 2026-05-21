@@ -2,9 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/database'
 
-/**
- * Validador de URL resiliente para Server Components.
- */
 const isValidUrl = (url: string | undefined): url is string => {
   if (!url) return false
   try {
@@ -16,8 +13,7 @@ const isValidUrl = (url: string | undefined): url is string => {
 }
 
 /**
- * Server-side Supabase Client.
- * Gerencia persistência de cookies para SSR de forma segura.
+ * Server-side Supabase Client para SSR.
  */
 export async function createClient() {
   const cookieStore = await cookies()
@@ -39,7 +35,7 @@ export async function createClient() {
             cookieStore.set(name, value, options)
           )
         } catch {
-          // Ignorado se chamado de um Server Component puro
+          // Ignorado se chamado de Server Component
         }
       },
     },
