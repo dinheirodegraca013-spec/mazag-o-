@@ -1,3 +1,4 @@
+
 # Mazagão Gás - Central de Comando
 
 Sistema operacional de alta performance para distribuição de gás em Guarujá.
@@ -37,6 +38,7 @@ git push -u origin main --force
 NEXT_PUBLIC_SUPABASE_URL=https://henajghdqbaorbacthbg.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anon_aqui
 SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role_aqui
+GOOGLE_GENAI_API_KEY=sua_chave_gemini_aqui
 ```
 
 © 2026 Mazagão Gás - Energia em Movimento.

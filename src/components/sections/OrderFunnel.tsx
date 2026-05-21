@@ -39,7 +39,6 @@ export function OrderFunnel() {
     setIsSubmitting(true)
     try {
       // 1. Salvar no Banco de Dados (Supabase)
-      // Ajustamos para não falhar se a busca de usuário falhar
       await OrderService.createOrder({
         customerName: values.name,
         customerPhone: values.phone,
@@ -48,16 +47,25 @@ export function OrderFunnel() {
         total_value: 115.00
       })
 
-      // 2. Gerar mensagem de WhatsApp via IA
-      const response = await generatePersonalizedWhatsAppOrderMessage({
-        customerName: values.name,
-        customerPhone: values.phone,
-        customerEmail: values.email,
-        productName: "P13 Prata (Padrão)"
-      })
+      // 2. Gerar mensagem (com Fallback caso a IA falhe)
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu telefone é ${values.phone} e meu e-mail é ${values.email}. Gostaria de pedir um P13 Prata.`
+      
+      try {
+        const response = await generatePersonalizedWhatsAppOrderMessage({
+          customerName: values.name,
+          customerPhone: values.phone,
+          customerEmail: values.email,
+          productName: "P13 Prata (Padrão)"
+        })
+        if (response?.whatsappMessage) {
+          finalMessage = response.whatsappMessage
+        }
+      } catch (aiError) {
+        console.warn("IA indisponível ou API Key inválida. Usando mensagem padrão.", aiError)
+      }
 
       const phone = "5513996253286"
-      const encodedMsg = encodeURIComponent(response.whatsappMessage)
+      const encodedMsg = encodeURIComponent(finalMessage)
       const url = `https://wa.me/${phone}?text=${encodedMsg}`
       
       setWhatsappUrl(url)
@@ -151,7 +159,7 @@ export function OrderFunnel() {
                         <FormLabel className="text-white/80 uppercase text-[10px] tracking-[0.2em] font-black">NOME COMPLETO</FormLabel>
                         <FormControl>
                           <Input 
-                            placeholder="mazagão" 
+                            placeholder="Seu Nome" 
                             className="bg-white text-black h-14 font-bold border-none rounded-sm placeholder:text-black/40" 
                             {...field} 
                           />
@@ -168,7 +176,7 @@ export function OrderFunnel() {
                         <FormLabel className="text-white/80 uppercase text-[10px] tracking-[0.2em] font-black">WHATSAPP</FormLabel>
                         <FormControl>
                           <Input 
-                            placeholder="13997340823" 
+                            placeholder="1399..." 
                             className="bg-white text-black h-14 font-bold border-none rounded-sm placeholder:text-black/40" 
                             {...field} 
                           />
@@ -185,7 +193,7 @@ export function OrderFunnel() {
                         <FormLabel className="text-white/80 uppercase text-[10px] tracking-[0.2em] font-black">E-MAIL</FormLabel>
                         <FormControl>
                           <Input 
-                            placeholder="admin@mazagao.com" 
+                            placeholder="email@exemplo.com" 
                             className="bg-white text-black h-14 font-bold border-none rounded-sm placeholder:text-black/40" 
                             {...field} 
                           />
