@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -59,4 +60,19 @@
 
 .neon-border-blue {
   box-shadow: 0 0 15px rgba(29, 34, 216, 0.3);
+}
+
+.shadow-neon-green {
+  box-shadow: 0 0 15px rgba(184, 255, 0, 0.4), 0 0 30px rgba(184, 255, 0, 0.2);
+}
+
+/* Custom scrollbar para tema industrial */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-primary/50 transition-colors;
 }
