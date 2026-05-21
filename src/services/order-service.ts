@@ -11,37 +11,46 @@ export const OrderService = {
   }) {
     const supabase = createClient()
 
-    // 1. Get customer user (se existir)
-    // Usamos try/catch para evitar que erro de RLS ou conexão quebre o fluxo do pedido
+    // 1. Tentar encontrar o usuário pelo email
     let userId = null
     try {
-      const { data: user } = await supabase
+      const { data: user, error: userError } = await supabase
         .from('users')
         .select('id')
         .eq('email', orderData.customerEmail)
         .maybeSingle()
       
-      userId = user?.id
+      if (!userError && user) {
+        userId = user.id
+      }
     } catch (e) {
-      console.warn("Aviso: Falha ao buscar usuário, prosseguindo com pedido anônimo.")
+      console.warn("Aviso: Falha ao buscar usuário, prosseguindo com pedido anônimo.", e)
     }
 
-    // 2. Insert order
-    // neighborhood e total_value são obrigatórios conforme a imagem
+    // 2. Inserir o pedido
+    // Garantimos que os valores obrigatórios estejam presentes
+    const insertData = {
+      customer_id: userId,
+      status: 'pending' as const,
+      total_value: orderData.total_value || 115.00,
+      neighborhood: orderData.neighborhood || "Geral"
+    }
+
     const { data, error } = await supabase
       .from('orders')
-      .insert({
-        customer_id: userId,
-        status: 'pending',
-        total_value: orderData.total_value || 115.00,
-        neighborhood: orderData.neighborhood || "Geral"
-      })
+      .insert(insertData)
       .select()
       .single()
 
     if (error) {
-      console.error("Erro Supabase:", error)
-      throw error
+      // Log detalhado para depuração
+      console.error("Erro Supabase (Detalhado):", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      throw new Error(error.message || "Falha ao registrar pedido no banco de dados.")
     }
     
     return data
