@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  :root {
+    --background: 234 62% 11%;
+    --foreground: 0 0% 96%;
+    --card: 234 62% 11%;
+    --card-foreground: 0 0% 96%;
+    --popover: 234 62% 11%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 77 100% 50%;
+    --primary-foreground: 234 62% 11%;
+    --secondary: 238 76% 48%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 234 30% 20%;
+    --muted-foreground: 234 10% 70%;
+    --accent: 77 100% 50%;
+    --accent-foreground: 234 62% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 234 30% 25%;
+    --input: 234 30% 25%;
+    --ring: 77 100% 50%;
+    --radius: 0.75rem;
+    --chart-1: 77 100% 50%;
+    --chart-2: 238 76% 48%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body;
+    background-image: radial-gradient(circle at 50% -20%, hsl(238 76% 48% / 0.15), transparent 70%);
+  }
+}
+
+.glass-morphism {
+  @apply bg-black/40 backdrop-blur-md border border-white/10;
+}
+
+.neon-text-green {
+  text-shadow: 0 0 10px rgba(184, 255, 0, 0.5), 0 0 20px rgba(184, 255, 0, 0.3);
+}
+
+.neon-border-green {
+  box-shadow: 0 0 15px rgba(184, 255, 0, 0.3);
+}
+
+.neon-border-blue {
+  box-shadow: 0 0 15px rgba(29, 34, 216, 0.3);
+}

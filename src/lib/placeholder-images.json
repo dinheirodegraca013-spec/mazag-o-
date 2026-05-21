@@ -1,0 +1,58 @@
+{
+  "placeholderImages": [
+    {
+      "id": "hero-bg",
+      "description": "City traffic at night with neon lights motion blur",
+      "imageUrl": "https://picsum.photos/seed/mazagao-hero/1920/1080",
+      "imageHint": "night city neon"
+    },
+    {
+      "id": "intro-bg",
+      "description": "Cinematic gas operation backdrop",
+      "imageUrl": "https://picsum.photos/seed/mazagao-intro/1920/1080",
+      "imageHint": "industrial gas"
+    },
+    {
+      "id": "delivery-moto",
+      "description": "Delivery motorcycle speeding through night streets",
+      "imageUrl": "https://picsum.photos/seed/mazagao-delivery/800/600",
+      "imageHint": "delivery motorcycle"
+    },
+    {
+      "id": "product-p5",
+      "description": "Botijão de Prata P5 - O legítimo botijão prateado Mazagão",
+      "imageUrl": "/images/produtos/p5.png",
+      "imageHint": "silver cylinder"
+    },
+    {
+      "id": "product-p13",
+      "description": "Botijão de Prata P13 - Cozinha Padrão Premium",
+      "imageUrl": "/images/produtos/p13.jpg",
+      "imageHint": "silver cylinder"
+    },
+    {
+      "id": "product-p20",
+      "description": "Botijão de Prata P20 - Performance Industrial",
+      "imageUrl": "/images/produtos/p20.jpg",
+      "imageHint": "silver cylinder"
+    },
+    {
+      "id": "product-p45",
+      "description": "Botijão de Prata P45 - Força e Durabilidade",
+      "imageUrl": "/images/produtos/p45.webp",
+      "imageHint": "silver cylinder"
+    },
+    {
+      "id": "map-guaruja",
+      "description": "Unidades Operacionais Mazagão Gás",
+      "imageUrl": "/images/operacional/unidades.jpg",
+      "imageHint": "industrial operation"
+    },
+    {
+      "id": "resolve-img",
+      "description": "Imagem de impacto para seção Mazagão Resolve",
+      "imageUrl": "/images/resolve/funcionario.jpg",
+      "imageHint": "industrial gas delivery"
+    }
+  ]
+}
