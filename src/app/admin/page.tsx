@@ -33,7 +33,8 @@ import {
   BarChart3,
   Flame,
   TrendingUp,
-  Clock
+  Clock,
+  Upload
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -58,10 +59,17 @@ import { updateCustomer } from "@/services/customers/update-customer"
 import { analyzeNeighborhoodDemand } from "@/ai/flows/neighborhood-analysis-flow"
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from "recharts"
 
 type OrderStatus = Database['public']['Tables']['orders']['Row']['status']
+
+const chartConfig = {
+  count: {
+    label: "Pedidos",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -115,7 +123,6 @@ export default function AdminDashboard() {
     checkAccess()
   }, [router, supabase])
 
-  // IA: Análise de Bairros (Mapa de Calor)
   const runDemandAnalysis = React.useCallback(async () => {
     if (orders.length === 0) return
     setIsAnalyzingDemand(true)
@@ -148,7 +155,6 @@ export default function AdminDashboard() {
     }
   }, [orders, customers])
 
-  // Dados de Horário de Pico
   const hourlyData = React.useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, i) => ({ hour: `${i}h`, count: 0 }))
     orders.forEach(o => {
@@ -157,6 +163,26 @@ export default function AdminDashboard() {
     })
     return hours.filter(h => h.count > 0 || (parseInt(h.hour) >= 8 && parseInt(h.hour) <= 22))
   }, [orders])
+
+  const filteredOrders = React.useMemo(() => {
+    if (!searchTerm) return orders
+    const lower = searchTerm.toLowerCase()
+    return orders.filter(o => 
+      o.id.toLowerCase().includes(lower) || 
+      o.customer?.name?.toLowerCase().includes(lower) ||
+      o.notes?.toLowerCase().includes(lower)
+    )
+  }, [orders, searchTerm])
+
+  const filteredCustomers = React.useMemo(() => {
+    if (!searchTerm) return customers
+    const lower = searchTerm.toLowerCase()
+    return customers.filter(c => 
+      c.name.toLowerCase().includes(lower) || 
+      c.email?.toLowerCase().includes(lower) ||
+      c.phone?.includes(searchTerm)
+    )
+  }, [customers, searchTerm])
 
   const handlePhoneChange = async (val: string) => {
     setNewOrder(prev => ({ ...prev, phone: val }))
@@ -395,6 +421,25 @@ export default function AdminDashboard() {
               </Button>
             )}
 
+            {(activeTab === 'orders' || activeTab === 'customers') && (
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest"
+                  onClick={() => exportToCSV(activeTab === 'orders' ? orders : customers, activeTab)}
+                >
+                  <Download className="mr-2 h-4 w-4" /> EXPORTAR
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest"
+                  onClick={() => toast({ title: "IMPORTAÇÃO", description: "Arraste o arquivo CSV para processar." })}
+                >
+                  <Upload className="mr-2 h-4 w-4" /> IMPORTAR
+                </Button>
+              </div>
+            )}
+
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <NeonButton variant="green" className="h-10 text-[10px] px-6"><Plus className="mr-2 h-4 w-4" /> NOVA ORDEM</NeonButton>
@@ -507,28 +552,30 @@ export default function AdminDashboard() {
                       <p className="text-[10px] font-black text-primary uppercase animate-pulse">IA Analisando Endereços...</p>
                     </div>
                   ) : neighborhoodData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={neighborhoodData} layout="vertical" margin={{ left: 20, right: 40 }}>
-                        <XAxis type="number" hide />
-                        <YAxis 
-                          dataKey="name" 
-                          type="category" 
-                          width={100} 
-                          axisLine={false} 
-                          tickLine={false}
-                          tick={{ fill: 'white', fontSize: 10, fontWeight: 'bold' }}
-                        />
-                        <Tooltip 
-                          cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
-                          content={<ChartTooltipContent hideLabel />} 
-                        />
-                        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                          {neighborhoodData.map((entry, index) => (
-                            <Cell key={index} fill={entry.intensity > 70 ? '#b8ff00' : entry.intensity > 30 ? '#1d22d8' : '#333'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <ChartContainer config={chartConfig} className="h-full w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={neighborhoodData} layout="vertical" margin={{ left: 20, right: 40 }}>
+                          <XAxis type="number" hide />
+                          <YAxis 
+                            dataKey="name" 
+                            type="category" 
+                            width={100} 
+                            axisLine={false} 
+                            tickLine={false}
+                            tick={{ fill: 'white', fontSize: 10, fontWeight: 'bold' }}
+                          />
+                          <Tooltip 
+                            cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
+                            content={<ChartTooltipContent hideLabel />} 
+                          />
+                          <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                            {neighborhoodData.map((entry, index) => (
+                              <Cell key={index} fill={entry.intensity > 70 ? '#b8ff00' : entry.intensity > 30 ? '#1d22d8' : '#333'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
                   ) : (
                     <div className="h-full flex items-center justify-center text-white/20 uppercase font-black text-xs">Sem dados para análise</div>
                   )}
@@ -550,14 +597,16 @@ export default function AdminDashboard() {
                   <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Distribuição de pedidos por hora do dia</p>
                 </CardHeader>
                 <CardContent className="px-0 h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={hourlyData} margin={{ top: 20, bottom: 20 }}>
-                      <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                      <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
-                      <Bar dataKey="count" fill="#1d22d8" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ChartContainer config={chartConfig} className="h-full w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={hourlyData} margin={{ top: 20, bottom: 20 }}>
+                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
+                        <Bar dataKey="count" fill="#1d22d8" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
                 </CardContent>
               </Card>
             </div>
