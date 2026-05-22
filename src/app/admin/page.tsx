@@ -21,7 +21,10 @@ import {
   Activity,
   Loader2,
   Search,
-  Filter
+  Filter,
+  UserCheck,
+  Mail,
+  Phone
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -32,6 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useOrdersRealtime } from "@/hooks/realtime/use-orders-realtime"
+import { useCustomersRealtime } from "@/hooks/realtime/use-customers-realtime"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/services/orders/update-order-status"
 import { createOrder } from "@/services/order-service"
@@ -42,7 +46,9 @@ type OrderStatus = Database['public']['Tables']['orders']['Row']['status']
 export default function AdminDashboard() {
   const router = useRouter()
   const { toast } = useToast()
-  const { orders, loading: isLoading, refresh } = useOrdersRealtime()
+  const { orders, loading: isLoadingOrders, refresh: refreshOrders } = useOrdersRealtime()
+  const { customers, loading: isLoadingCustomers, refresh: refreshCustomers } = useCustomersRealtime()
+  
   const [activeTab, setActiveTab] = React.useState("overview")
   const [isAuthorizing, setIsAuthorizing] = React.useState(true)
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false)
@@ -78,21 +84,29 @@ export default function AdminDashboard() {
 
   const stats = React.useMemo(() => {
     return {
-      total: orders.length,
+      totalOrders: orders.length,
+      totalCustomers: customers.length,
       pending: orders.filter(o => o.status === 'pending').length,
-      delivering: orders.filter(o => o.status === 'delivering').length,
-      completed: orders.filter(o => o.status === 'completed').length,
       revenue: orders.reduce((acc, curr) => acc + (curr.total || 0), 0)
     }
-  }, [orders])
+  }, [orders, customers])
 
   const filteredOrders = React.useMemo(() => {
-    if (!searchTerm) return orders
+    if (!searchTerm || activeTab !== 'orders') return orders
     return orders.filter(o => 
       o.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       o.id.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  }, [orders, searchTerm])
+  }, [orders, searchTerm, activeTab])
+
+  const filteredCustomers = React.useMemo(() => {
+    if (!searchTerm || activeTab !== 'customers') return customers
+    return customers.filter(c => 
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [customers, searchTerm, activeTab])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -122,7 +136,8 @@ export default function AdminDashboard() {
       })
       toast({ title: "ORDEM CRIADA", description: "Sucesso no registro." })
       setIsDialogOpen(false)
-      refresh()
+      refreshOrders()
+      refreshCustomers()
       setNewOrder({ name: "", phone: "", email: "", notes: "", total: "115.00" })
     } catch (error: any) {
       toast({ variant: "destructive", title: "FALHA", description: error.message })
@@ -148,7 +163,10 @@ export default function AdminDashboard() {
             ].map((item) => (
               <SidebarMenuItem key={item.id}>
                 <SidebarMenuButton 
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => {
+                    setActiveTab(item.id)
+                    setSearchTerm("")
+                  }}
                   isActive={activeTab === item.id}
                   className={`w-full text-white/50 h-12 rounded-none border-l-2 border-transparent font-bold text-[10px] tracking-widest transition-all ${activeTab === item.id ? 'bg-primary/5 text-primary border-primary' : 'hover:bg-white/5'}`}
                 >
@@ -176,8 +194,8 @@ export default function AdminDashboard() {
               {activeTab === 'overview' ? 'PAINEL DE CONTROLE' : activeTab === 'orders' ? 'GERENCIAR PEDIDOS' : 'BASE DE CLIENTES'}
             </h1>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">REAL-TIME ATIVO</Badge>
-              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">SISTEMA v2.0</span>
+              <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">CRM ATIVO</Badge>
+              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">REAL-TIME v2.0</span>
             </div>
           </div>
           
@@ -213,9 +231,9 @@ export default function AdminDashboard() {
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { label: 'Volume Total', val: stats.total, color: 'text-primary' },
-                { label: 'Aguardando', val: stats.pending, color: 'text-white' },
-                { label: 'Em Entrega', val: stats.delivering, color: 'text-secondary' },
+                { label: 'Volume Pedidos', val: stats.totalOrders, color: 'text-primary' },
+                { label: 'Base Clientes', val: stats.totalCustomers, color: 'text-white' },
+                { label: 'Aguardando', val: stats.pending, color: 'text-secondary' },
                 { label: 'Receita Total', val: `R$ ${stats.revenue.toFixed(2)}`, color: 'text-primary' },
               ].map((stat, i) => (
                 <Card key={i} className="glass-morphism border-white/5 rounded-none p-6 relative overflow-hidden group">
@@ -270,13 +288,12 @@ export default function AdminDashboard() {
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
                 <Input 
-                  placeholder="BUSCAR POR NOME OU ID..." 
+                  placeholder="BUSCAR PEDIDO POR NOME OU ID..." 
                   className="bg-white/5 border-white/10 rounded-none h-12 pl-12 text-white uppercase font-bold text-xs tracking-widest"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <NeonButton variant="blue" className="h-12 text-[10px]"><Filter className="mr-2 h-4 w-4" /> FILTRAR</NeonButton>
             </div>
 
             <Card className="glass-morphism border-white/5 rounded-none overflow-hidden">
@@ -289,8 +306,8 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={3} className="px-8 py-20 text-center text-primary font-black animate-pulse tracking-[0.5em] uppercase">SINCRONIZANDO BASE DE DADOS...</TableCell></TableRow>
+                  {isLoadingOrders ? (
+                    <TableRow><TableCell colSpan={3} className="px-8 py-20 text-center text-primary font-black animate-pulse tracking-[0.5em] uppercase">SINCRONIZANDO PEDIDOS...</TableCell></TableRow>
                   ) : filteredOrders.length === 0 ? (
                     <TableRow><TableCell colSpan={3} className="px-8 py-20 text-center text-white/20 font-black uppercase">NENHUMA ORDEM ENCONTRADA</TableCell></TableRow>
                   ) : (
@@ -332,10 +349,74 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'customers' && (
-          <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Users className="h-16 w-16 text-white/10 mb-6" />
-            <h2 className="font-impact text-4xl text-white uppercase mb-2">CRM MAZAGÃO GÁS</h2>
-            <p className="text-white/40 uppercase text-[10px] font-black tracking-widest max-w-sm">Módulo de gestão de fidelidade em fase de calibração operacional.</p>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="flex flex-col md:flex-row gap-4 mb-8">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                <Input 
+                  placeholder="BUSCAR CLIENTE POR NOME, EMAIL OU TELEFONE..." 
+                  className="bg-white/5 border-white/10 rounded-none h-12 pl-12 text-white uppercase font-bold text-xs tracking-widest"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <Card className="glass-morphism border-white/5 rounded-none overflow-hidden">
+              <Table>
+                <TableHeader className="bg-white/[0.02]">
+                  <TableRow className="border-white/5">
+                    <TableHead className="px-8 text-[10px] font-black uppercase text-white/40">CADASTRO / CLIENTE</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase text-white/40">INFORMAÇÕES DE CONTATO</TableHead>
+                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">STATUS CRM</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoadingCustomers ? (
+                    <TableRow><TableCell colSpan={3} className="px-8 py-20 text-center text-primary font-black animate-pulse tracking-[0.5em] uppercase">SINCRONIZANDO BASE CRM...</TableCell></TableRow>
+                  ) : filteredCustomers.length === 0 ? (
+                    <TableRow><TableCell colSpan={3} className="px-8 py-20 text-center text-white/20 font-black uppercase">NENHUM CLIENTE REGISTRADO</TableCell></TableRow>
+                  ) : (
+                    filteredCustomers.map(customer => (
+                      <TableRow key={customer.id} className="border-white/5 hover:bg-white/[0.03]">
+                        <TableCell className="px-8 py-6">
+                          <p className="text-[9px] text-white/30 font-black uppercase tracking-widest mb-1">
+                            DESDE {new Date(customer.created_at).toLocaleDateString('pt-BR')}
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                              <UserCheck className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-white uppercase text-base">{customer.name}</p>
+                              <Badge className="bg-white/5 text-white/40 text-[8px] font-black border-white/10 uppercase">ID: {customer.id.slice(0, 8)}</Badge>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-white/60">
+                              <Phone className="h-3 w-3 text-primary" />
+                              <span className="text-xs font-bold">{customer.phone || 'NÃO INFORMADO'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/40">
+                              <Mail className="h-3 w-3" />
+                              <span className="text-[10px] font-medium">{customer.email || 'SEM E-MAIL'}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right px-8">
+                          <Badge className="bg-primary/10 text-primary border-primary/20 uppercase text-[9px] font-black tracking-widest py-1 px-3">
+                            {customer.active ? 'FIDELIDADE ATIVA' : 'INATIVO'}
+                          </Badge>
+                          <p className="text-[9px] text-white/20 font-black uppercase tracking-widest mt-2">SISTEMA INTEGRADO</p>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </div>
         )}
       </main>
