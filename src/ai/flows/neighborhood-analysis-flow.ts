@@ -27,6 +27,7 @@ export async function analyzeNeighborhoodDemand(input: { addresses: string[] }) 
 
 const neighborhoodAnalysisPrompt = ai.definePrompt({
   name: 'neighborhoodAnalysisPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: {schema: NeighborhoodAnalysisInputSchema},
   output: {schema: NeighborhoodAnalysisOutputSchema},
   prompt: `Você é o estrategista logístico da Mazagão Gás em Guarujá.
@@ -54,6 +55,10 @@ const neighborhoodAnalysisFlow = ai.defineFlow(
   },
   async input => {
     try {
+      if (!input.addresses || input.addresses.length === 0) {
+        return { neighborhoods: [], insights: "Nenhum endereço disponível para análise no momento." };
+      }
+      
       const {output} = await neighborhoodAnalysisPrompt(input);
       if (!output) throw new Error('A IA não retornou dados de análise.');
       return output;
@@ -62,7 +67,7 @@ const neighborhoodAnalysisFlow = ai.defineFlow(
       // Fallback básico para não travar a interface
       return {
         neighborhoods: [],
-        insights: "Não foi possível processar a análise geográfica no momento devido a uma falha de conexão com a IA."
+        insights: "Análise geográfica indisponível. Verifique as credenciais da API Gemini."
       };
     }
   }

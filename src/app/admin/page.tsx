@@ -60,7 +60,7 @@ import { analyzeNeighborhoodDemand } from "@/ai/flows/neighborhood-analysis-flow
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from "recharts"
+import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts"
 
 type OrderStatus = Database['public']['Tables']['orders']['Row']['status']
 
@@ -131,7 +131,11 @@ export default function AdminDashboard() {
       const analysis = await analyzeNeighborhoodDemand({ addresses })
       setNeighborhoodData(analysis.neighborhoods)
       setAiInsights(analysis.insights)
-      toast({ title: "ANÁLISE CONCLUÍDA", description: "Mapa de calor de demanda atualizado." })
+      if (analysis.neighborhoods.length > 0) {
+        toast({ title: "ANÁLISE CONCLUÍDA", description: "Mapa de calor de demanda atualizado." })
+      } else {
+        toast({ variant: "destructive", title: "SEM DADOS", description: "Não foram encontrados endereços válidos para análise." })
+      }
     } catch (err) {
       console.error(err)
       toast({ variant: "destructive", title: "FALHA NA IA", description: "Não foi possível processar o mapa de calor." })
@@ -141,10 +145,10 @@ export default function AdminDashboard() {
   }, [orders, toast])
 
   React.useEffect(() => {
-    if (activeTab === 'charts' && neighborhoodData.length === 0) {
+    if (activeTab === 'charts' && neighborhoodData.length === 0 && !isLoadingOrders) {
       runDemandAnalysis()
     }
-  }, [activeTab, neighborhoodData.length, runDemandAnalysis])
+  }, [activeTab, neighborhoodData.length, runDemandAnalysis, isLoadingOrders])
 
   const stats = React.useMemo(() => {
     return {
@@ -430,13 +434,6 @@ export default function AdminDashboard() {
                 >
                   <Download className="mr-2 h-4 w-4" /> EXPORTAR
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest"
-                  onClick={() => toast({ title: "IMPORTAÇÃO", description: "Arraste o arquivo CSV para processar." })}
-                >
-                  <Upload className="mr-2 h-4 w-4" /> IMPORTAR
-                </Button>
               </div>
             )}
 
@@ -564,7 +561,7 @@ export default function AdminDashboard() {
                             tickLine={false}
                             tick={{ fill: 'white', fontSize: 10, fontWeight: 'bold' }}
                           />
-                          <Tooltip 
+                          <ChartTooltip 
                             cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
                             content={<ChartTooltipContent hideLabel />} 
                           />
@@ -577,7 +574,9 @@ export default function AdminDashboard() {
                       </ResponsiveContainer>
                     </ChartContainer>
                   ) : (
-                    <div className="h-full flex items-center justify-center text-white/20 uppercase font-black text-xs">Sem dados para análise</div>
+                    <div className="h-full flex items-center justify-center text-white/20 uppercase font-black text-xs text-center px-6">
+                      {isLoadingOrders ? "Sincronizando dados..." : "Sem endereços suficientes para análise regional."}
+                    </div>
                   )}
                 </CardContent>
                 {aiInsights && (
@@ -602,7 +601,7 @@ export default function AdminDashboard() {
                       <BarChart data={hourlyData} margin={{ top: 20, bottom: 20 }}>
                         <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
+                        <ChartTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
                         <Bar dataKey="count" fill="#1d22d8" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
