@@ -1,6 +1,8 @@
+
 'use server';
 /**
  * @fileOverview AI Flow para análise de bairros e calor de demanda.
+ * Analisa endereços brutos e agrupa por região para inteligência logística.
  */
 
 import {ai} from '@/ai/genkit';
@@ -28,20 +30,20 @@ const neighborhoodAnalysisPrompt = ai.definePrompt({
   input: {schema: NeighborhoodAnalysisInputSchema},
   output: {schema: NeighborhoodAnalysisOutputSchema},
   prompt: `Você é o estrategista logístico da Mazagão Gás em Guarujá.
-Analise a seguinte lista de endereços e agrupe-os por BAIRRO.
+Sua tarefa é analisar uma lista de endereços e extrair o BAIRRO de cada um para gerar um mapa de calor.
 
 Endereços:
 {{#each addresses}}
 - {{{this}}}
 {{/each}}
 
-Instruções:
-1. Extraia o nome do bairro de cada endereço (ex: Enseada, Astúrias, Pitangueiras, Vicente de Carvalho, Paecará, etc).
+Instruções Operacionais:
+1. Extraia o nome do bairro de cada endereço (ex: Enseada, Astúrias, Pitangueiras, Vicente de Carvalho, Paecará, Morrinhos, Santa Rosa, etc).
 2. Conte quantos pedidos cada bairro recebeu.
-3. Calcule a 'intensity' (0-100) baseada na proporção de pedidos em relação ao total.
-4. Forneça um insight estratégico curto sobre onde a Mazagão deve concentrar mais motoboys agora.
+3. Calcule a 'intensity' (0-100) baseada no volume de pedidos daquele bairro em relação ao total da lista.
+4. Forneça um insight estratégico curto (máximo 2 frases) sobre a concentração de demanda atual.
 
-Retorne APENAS o JSON estruturado conforme o esquema.`,
+Responda rigorosamente com o JSON estruturado.`,
 });
 
 const neighborhoodAnalysisFlow = ai.defineFlow(
@@ -51,8 +53,17 @@ const neighborhoodAnalysisFlow = ai.defineFlow(
     outputSchema: NeighborhoodAnalysisOutputSchema,
   },
   async input => {
-    const {output} = await neighborhoodAnalysisPrompt(input);
-    if (!output) throw new Error('Falha na análise de demanda.');
-    return output;
+    try {
+      const {output} = await neighborhoodAnalysisPrompt(input);
+      if (!output) throw new Error('A IA não retornou dados de análise.');
+      return output;
+    } catch (error: any) {
+      console.error('Erro na análise de bairros Genkit:', error);
+      // Fallback básico para não travar a interface
+      return {
+        neighborhoods: [],
+        insights: "Não foi possível processar a análise geográfica no momento devido a uma falha de conexão com a IA."
+      };
+    }
   }
 );
