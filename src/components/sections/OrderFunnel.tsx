@@ -10,7 +10,8 @@ import { NeonButton } from "@/components/ui/neon-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { generatePersonalizedWhatsAppOrderMessage } from "@/ai/flows/personalized-whatsapp-order-message-flow"
 import { createOrder } from "@/services/order-service"
-import { CheckCircle2, Loader2, Send, MessageCircle } from "lucide-react"
+import { getCustomerByPhone } from "@/services/customers/get-customer-by-phone"
+import { CheckCircle2, Loader2, Send, MessageCircle, MapPin } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 const formSchema = z.object({
@@ -23,6 +24,8 @@ export function OrderFunnel() {
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isSuccess, setIsSuccess] = React.useState(false)
   const [whatsappUrl, setWhatsappUrl] = React.useState("")
+  const [lastAddress, setLastAddress] = React.useState<string | null>(null)
+  const [isSearching, setIsSearching] = React.useState(false)
   const { toast } = useToast()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -34,27 +37,61 @@ export function OrderFunnel() {
     }
   })
 
+  // Efeito para detectar cliente recorrente pelo telefone
+  const phoneValue = form.watch("phone")
+  React.useEffect(() => {
+    const checkCustomer = async () => {
+      const cleanPhone = phoneValue.replace(/\D/g, "")
+      if (cleanPhone.length >= 10) {
+        setIsSearching(true)
+        try {
+          const customer = await getCustomerByPhone(cleanPhone)
+          if (customer) {
+            if (!form.getValues("name")) {
+              form.setValue("name", customer.name)
+            }
+            if (!form.getValues("email") && customer.email) {
+              form.setValue("email", customer.email)
+            }
+            if (customer.address) {
+              setLastAddress(customer.address)
+              toast({
+                title: "CLIENTE RECORRENTE",
+                description: "Seu último endereço foi localizado para agilizar o pedido.",
+              })
+            }
+          }
+        } catch (e) {
+          console.error("Erro ao buscar cliente:", e)
+        } finally {
+          setIsSearching(false)
+        }
+      }
+    }
+    checkCustomer()
+  }, [phoneValue, form, toast])
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Registrar Ordem no Banco (Server Action)
+      // 1. Registrar Ordem no Banco
       await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,
-        notes: "Captado via Site Mazagão Gás",
+        notes: lastAddress ? `Endereço Reutilizado: ${lastAddress}` : "Captado via Site Mazagão Gás",
         total: 115.00
       })
 
-      // 2. Gerar Mensagem Refinada
-      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir agora mesmo.`
+      // 2. Gerar Mensagem com IA (incluindo o endereço se existir)
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir agora mesmo.${lastAddress ? ` Meu último endereço cadastrado foi: ${lastAddress}.` : ""}`
       
       try {
         const response = await generatePersonalizedWhatsAppOrderMessage({
           customerName: values.name,
           customerPhone: values.phone,
           customerEmail: values.email,
-          productName: "Gás P13 Prata"
+          deliveryAddress: lastAddress || undefined
         })
         if (response?.whatsappMessage) finalMessage = response.whatsappMessage
       } catch (e) {
@@ -93,10 +130,20 @@ export function OrderFunnel() {
           <p className="text-xl text-white/40 max-w-md font-bold uppercase tracking-widest leading-snug">
             Seu pedido será registrado automaticamente em nossa central operacional de alta performance.
           </p>
+          
+          {lastAddress && !isSuccess && (
+            <div className="bg-primary/5 border border-primary/20 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-left-4">
+              <MapPin className="h-5 w-5 text-primary mt-1 shrink-0" />
+              <div>
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Endereço Detectado</p>
+                <p className="text-sm text-white/70 font-bold uppercase">{lastAddress}</p>
+                <p className="text-[9px] text-white/30 uppercase mt-1">Confirmaremos os detalhes no WhatsApp</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="relative">
-          {/* Outer glow effect */}
           <div className="absolute -inset-1 bg-primary/20 blur-2xl rounded-none opacity-50" />
           
           <Card className="bg-[#05060f] border border-white/10 relative overflow-hidden shadow-2xl rounded-none z-10">
@@ -122,6 +169,25 @@ export function OrderFunnel() {
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                    <div className="relative">
+                      <FormField control={form.control} name="phone" render={({ field }) => (
+                        <FormItem className="space-y-3">
+                          <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-[0.2em]">WHATSAPP (NÚMERO COM DDD)</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input 
+                                placeholder="13997340823" 
+                                className="bg-white text-black h-16 font-black border-none rounded-none text-xl uppercase placeholder:text-black/20 focus-visible:ring-primary ring-offset-0" 
+                                {...field} 
+                              />
+                              {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-6 w-6 animate-spin text-primary" />}
+                            </div>
+                          </FormControl>
+                          <FormMessage className="text-[10px] font-bold uppercase text-destructive" />
+                        </FormItem>
+                      )} />
+                    </div>
+
                     <FormField control={form.control} name="name" render={({ field }) => (
                       <FormItem className="space-y-3">
                         <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-[0.2em]">NOME COMPLETO</FormLabel>
@@ -136,35 +202,19 @@ export function OrderFunnel() {
                       </FormItem>
                     )} />
                     
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <FormField control={form.control} name="phone" render={({ field }) => (
-                        <FormItem className="space-y-3">
-                          <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-[0.2em]">WHATSAPP</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="13997340823" 
-                              className="bg-white text-black h-16 font-black border-none rounded-none text-xl uppercase placeholder:text-black/20 focus-visible:ring-primary ring-offset-0" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormMessage className="text-[10px] font-bold uppercase text-destructive" />
-                        </FormItem>
-                      )} />
-                      
-                      <FormField control={form.control} name="email" render={({ field }) => (
-                        <FormItem className="space-y-3">
-                          <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-[0.2em]">E-MAIL</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="DINHEIRODEGRACA013@GMAIL.COM" 
-                              className="bg-white text-black h-16 font-black border-none rounded-none text-xl uppercase placeholder:text-black/20 focus-visible:ring-primary ring-offset-0" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormMessage className="text-[10px] font-bold uppercase text-destructive" />
-                        </FormItem>
-                      )} />
-                    </div>
+                    <FormField control={form.control} name="email" render={({ field }) => (
+                      <FormItem className="space-y-3">
+                        <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-[0.2em]">E-MAIL</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="CONTATO@GMAIL.COM" 
+                            className="bg-white text-black h-16 font-black border-none rounded-none text-xl uppercase placeholder:text-black/20 focus-visible:ring-primary ring-offset-0" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage className="text-[10px] font-bold uppercase text-destructive" />
+                      </FormItem>
+                    )} />
 
                     <NeonButton type="submit" className="w-full h-20 rounded-none text-2xl font-impact group transition-all duration-300" variant="green" disabled={isSubmitting}>
                       {isSubmitting ? (
