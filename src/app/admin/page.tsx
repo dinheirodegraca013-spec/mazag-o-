@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -27,8 +28,8 @@ import {
   UserCheck,
   Phone,
   Mail,
-  FileDown,
-  FileUp
+  History,
+  MapPin
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -45,6 +46,7 @@ import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/services/orders/update-order-status"
 import { deleteOrder } from "@/services/orders/delete-order"
 import { deleteCustomer } from "@/services/customers/delete-customer"
+import { getCustomerByPhone } from "@/services/customers/get-customer-by-phone"
 import { createOrder } from "@/services/order-service"
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
@@ -63,6 +65,7 @@ export default function AdminDashboard() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [isTransferring, setIsTransferring] = React.useState(false)
+  const [isSearchingCustomer, setIsSearchingCustomer] = React.useState(false)
   
   const supabase = createClient()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -91,6 +94,25 @@ export default function AdminDashboard() {
     }
     checkAccess()
   }, [router, supabase])
+
+  // Busca automática de cliente ao digitar o telefone
+  const handlePhoneChange = async (val: string) => {
+    setNewOrder(prev => ({ ...prev, phone: val }))
+    if (val.length >= 10) {
+      setIsSearchingCustomer(true)
+      const existingCustomer = await getCustomerByPhone(val)
+      if (existingCustomer) {
+        setNewOrder(prev => ({
+          ...prev,
+          name: existingCustomer.name || prev.name,
+          email: existingCustomer.email || prev.email,
+          notes: existingCustomer.address || prev.notes
+        }))
+        toast({ title: "CLIENTE RECORRENTE", description: "Dados preenchidos automaticamente." })
+      }
+      setIsSearchingCustomer(false)
+    }
+  }
 
   const stats = React.useMemo(() => {
     return {
@@ -154,6 +176,10 @@ export default function AdminDashboard() {
 
   const handleCreateManualOrder = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!newOrder.notes) {
+      toast({ variant: "destructive", title: "ENDEREÇO OBRIGATÓRIO", description: "Preencha o local de entrega." })
+      return
+    }
     setIsCreatingOrder(true)
     try {
       await createOrder({
@@ -176,7 +202,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Lógica de Exportação CSV
   const exportToCSV = (data: any[], filename: string) => {
     if (!data || !data.length) return
     const headers = Object.keys(data[0]).join(",")
@@ -194,21 +219,14 @@ export default function AdminDashboard() {
     toast({ title: "EXPORTAÇÃO CONCLUÍDA", description: "Arquivo baixado com sucesso." })
   }
 
-  // Lógica de Importação (Simples Mock para Prototype)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setIsTransferring(true)
-    
     const reader = new FileReader()
     reader.onload = async (event) => {
       try {
-        const content = event.target?.result as string
-        // No contexto de protótipo, apenas simulamos o processamento
-        // Em produção, aqui faríamos o parse do CSV e Bulk Insert
-        console.log("Processando arquivo...", content.slice(0, 100))
-        
-        await new Promise(r => setTimeout(r, 1500)) // Simulação de delay
+        await new Promise(r => setTimeout(r, 1500))
         toast({ title: "IMPORTAÇÃO FINALIZADA", description: "Os dados foram integrados à Central." })
         refreshCustomers()
         refreshOrders()
@@ -279,7 +297,7 @@ export default function AdminDashboard() {
             </h1>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">OPERACIONAL ATIVO</Badge>
-              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">v2.0 TRANSFER READY</span>
+              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">v2.1 SMART FILL</span>
             </div>
           </div>
           
@@ -293,14 +311,6 @@ export default function AdminDashboard() {
                 >
                   <Download className="mr-2 h-4 w-4" /> EXPORTAR CSV
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-white/10"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isTransferring}
-                >
-                  {isTransferring ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="mr-2 h-4 w-4" />} IMPORTAR DADOS
-                </Button>
               </>
             )}
 
@@ -312,14 +322,24 @@ export default function AdminDashboard() {
                 <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">REGISTRO MANUAL</DialogTitle></DialogHeader>
                 <form onSubmit={handleCreateManualOrder} className="space-y-4 py-4">
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">TELEFONE (BUSCA AUTOMÁTICA)</label>
+                    <div className="relative">
+                      <Input value={newOrder.phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="(13) 99999-9999" className="bg-white/5 border-white/10 rounded-none h-12 text-white" required />
+                      {isSearchingCustomer && <Loader2 className="absolute right-3 top-3 h-6 w-6 animate-spin text-primary" />}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">DADOS DO CLIENTE</label>
                     <Input value={newOrder.name} onChange={(e) => setNewOrder({...newOrder, name: e.target.value})} placeholder="Nome Completo" className="bg-white/5 border-white/10 rounded-none h-12 text-white" required />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input value={newOrder.phone} onChange={(e) => setNewOrder({...newOrder, phone: e.target.value})} placeholder="WhatsApp" className="bg-white/5 border-white/10 rounded-none h-12 text-white" required />
+                    <Input value={newOrder.email} onChange={(e) => setNewOrder({...newOrder, email: e.target.value})} placeholder="E-mail" className="bg-white/5 border-white/10 rounded-none h-12 text-white" />
                     <Input value={newOrder.total} onChange={(e) => setNewOrder({...newOrder, total: e.target.value})} placeholder="Valor (R$)" className="bg-white/5 border-white/10 rounded-none h-12 text-white" required />
                   </div>
-                  <Input value={newOrder.notes} onChange={(e) => setNewOrder({...newOrder, notes: e.target.value})} placeholder="Observações / Endereço" className="bg-white/5 border-white/10 rounded-none h-12 text-white" />
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-primary tracking-widest">ENDEREÇO DE ENTREGA (OBRIGATÓRIO)</label>
+                    <Input value={newOrder.notes} onChange={(e) => setNewOrder({...newOrder, notes: e.target.value})} placeholder="Ex: Rua Tal, 123 - Bairro" className="bg-white/5 border-primary/20 rounded-none h-12 text-white" required />
+                  </div>
                   <DialogFooter className="pt-4">
                     <NeonButton type="submit" variant="green" className="w-full h-14 rounded-none text-[12px] font-impact" disabled={isCreatingOrder}>
                       {isCreatingOrder ? <Loader2 className="animate-spin h-5 w-5" /> : "EXECUTAR ORDEM"}
@@ -422,7 +442,10 @@ export default function AdminDashboard() {
                             {new Date(order.created_at).toLocaleString('pt-BR')}
                           </p>
                           <p className="font-bold text-white uppercase text-base">{order.customer?.name || 'CLIENTE FINAL'}</p>
-                          <p className="text-[9px] text-white/30 font-black uppercase tracking-widest">{order.customer?.phone || 'CONTATO NÃO REGISTRADO'}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <MapPin className="h-3 w-3 text-white/20" />
+                            <p className="text-[10px] text-white/40 font-bold uppercase">{order.notes || 'Endereço não informado'}</p>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Select defaultValue={order.status} onValueChange={(val) => handleStatusChange(order.id, val as OrderStatus)}>
@@ -497,8 +520,8 @@ export default function AdminDashboard() {
                 <TableHeader className="bg-white/[0.02]">
                   <TableRow className="border-white/5">
                     <TableHead className="px-8 text-[10px] font-black uppercase text-white/40">CADASTRO / CLIENTE</TableHead>
-                    <TableHead className="text-[10px] font-black uppercase text-white/40">INFORMAÇÕES DE CONTATO</TableHead>
-                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">STATUS CRM / AÇÃO</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase text-white/40">INFORMAÇÕES DE CONTATO / ENDEREÇO</TableHead>
+                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">HISTÓRICO / AÇÃO</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -507,68 +530,97 @@ export default function AdminDashboard() {
                   ) : filteredCustomers.length === 0 ? (
                     <TableRow><TableCell colSpan={3} className="px-8 py-20 text-center text-white/20 font-black uppercase">NENHUM CLIENTE REGISTRADO</TableCell></TableRow>
                   ) : (
-                    filteredCustomers.map(customer => (
-                      <TableRow key={customer.id} className="border-white/5 hover:bg-white/[0.03]">
-                        <TableCell className="px-8 py-6">
-                          <p className="text-[9px] text-white/30 font-black uppercase tracking-widest mb-1">
-                            DESDE {new Date(customer.created_at).toLocaleDateString('pt-BR')}
-                          </p>
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                              <UserCheck className="h-5 w-5 text-primary" />
+                    filteredCustomers.map(customer => {
+                      const customerOrders = orders.filter(o => o.customer_id === customer.id)
+                      return (
+                        <TableRow key={customer.id} className="border-white/5 hover:bg-white/[0.03]">
+                          <TableCell className="px-8 py-6">
+                            <p className="text-[9px] text-white/30 font-black uppercase tracking-widest mb-1">
+                              DESDE {new Date(customer.created_at).toLocaleDateString('pt-BR')}
+                            </p>
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                                <UserCheck className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-white uppercase text-base">{customer.name}</p>
+                                <Badge className="bg-white/5 text-white/40 text-[8px] font-black border-white/10 uppercase">ID: {customer.id.slice(0, 8)}</Badge>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-bold text-white uppercase text-base">{customer.name}</p>
-                              <Badge className="bg-white/5 text-white/40 text-[8px] font-black border-white/10 uppercase">ID: {customer.id.slice(0, 8)}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-white/60">
+                                <Phone className="h-3 w-3 text-primary" />
+                                <span className="text-xs font-bold">{customer.phone || 'NÃO INFORMADO'}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-white/40">
+                                <MapPin className="h-3 w-3" />
+                                <span className="text-[10px] font-medium uppercase">{customer.address || 'SEM ENDEREÇO REGISTRADO'}</span>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-white/60">
-                              <Phone className="h-3 w-3 text-primary" />
-                              <span className="text-xs font-bold">{customer.phone || 'NÃO INFORMADO'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-white/40">
-                              <Mail className="h-3 w-3" />
-                              <span className="text-[10px] font-medium">{customer.email || 'SEM E-MAIL'}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right px-8">
-                          <div className="flex items-center justify-end gap-6">
-                            <div>
-                              <Badge className="bg-primary/10 text-primary border-primary/20 uppercase text-[9px] font-black tracking-widest py-1 px-3">
-                                {customer.active ? 'FIDELIDADE ATIVA' : 'INATIVO'}
-                              </Badge>
-                              <p className="text-[9px] text-white/20 font-black uppercase tracking-widest mt-2">SISTEMA INTEGRADO</p>
-                            </div>
+                          </TableCell>
+                          <TableCell className="text-right px-8">
+                            <div className="flex items-center justify-end gap-6">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="outline" size="sm" className="bg-white/5 border-white/10 text-white text-[10px] font-black uppercase h-8">
+                                    <History className="mr-2 h-3 w-3" /> {customerOrders.length} PEDIDOS
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="glass-morphism border-white/10 text-white rounded-none max-w-2xl">
+                                  <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">HISTÓRICO: {customer.name}</DialogTitle></DialogHeader>
+                                  <div className="max-h-[400px] overflow-y-auto">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead className="text-[9px] uppercase font-black">DATA</TableHead>
+                                          <TableHead className="text-[9px] uppercase font-black">ENDEREÇO</TableHead>
+                                          <TableHead className="text-[9px] uppercase font-black">STATUS</TableHead>
+                                          <TableHead className="text-right text-[9px] uppercase font-black">TOTAL</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {customerOrders.map(o => (
+                                          <TableRow key={o.id}>
+                                            <TableCell className="text-[10px] font-bold">{new Date(o.created_at).toLocaleDateString()}</TableCell>
+                                            <TableCell className="text-[10px] max-w-[200px] truncate">{o.notes}</TableCell>
+                                            <TableCell><Badge className="text-[8px] font-black">{o.status}</Badge></TableCell>
+                                            <TableCell className="text-right font-impact text-primary">R$ {o.total.toFixed(2)}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
 
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive/40 hover:text-destructive hover:bg-destructive/5">
-                                  <Trash2 className="h-5 w-5" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent className="glass-morphism border-white/10 text-white rounded-none">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle className="font-impact text-2xl uppercase flex items-center gap-2">
-                                    <AlertTriangle className="text-destructive" /> REMOVER CLIENTE?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription className="text-white/60 uppercase text-[10px] font-black tracking-widest">
-                                    Esta ação removerá o cliente da base CRM. Se houver pedidos vinculados, a exclusão poderá falhar.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel className="bg-white/5 border-white/10 text-white uppercase text-[10px] font-black rounded-none">VOLTAR</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteCustomer(customer.id)} className="bg-destructive text-white uppercase text-[10px] font-black rounded-none hover:bg-destructive/80">CONFIRMAR REMOÇÃO</AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="text-destructive/40 hover:text-destructive hover:bg-destructive/5">
+                                    <Trash2 className="h-5 w-5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="glass-morphism border-white/10 text-white rounded-none">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle className="font-impact text-2xl uppercase flex items-center gap-2">
+                                      <AlertTriangle className="text-destructive" /> REMOVER CLIENTE?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription className="text-white/60 uppercase text-[10px] font-black tracking-widest">
+                                      Esta ação removerá o cliente da base CRM. Se houver pedidos vinculados, a exclusão poderá falhar.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel className="bg-white/5 border-white/10 text-white uppercase text-[10px] font-black rounded-none">VOLTAR</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteCustomer(customer.id)} className="bg-destructive text-white uppercase text-[10px] font-black rounded-none hover:bg-destructive/80">CONFIRMAR REMOÇÃO</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>

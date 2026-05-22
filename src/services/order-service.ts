@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { supabaseAdmin } from "@/lib/supabase/admin"
+import { revalidatePath } from "next/cache"
 
 /**
  * Service to handle order creation with high availability.
@@ -12,53 +13,49 @@ export async function createOrder(orderData: {
   customerName: string
   customerPhone: string
   customerEmail: string
-  notes?: string
+  notes: string // Agora obrigatório (Endereço)
   total?: number
   isAdminAction?: boolean
 }) {
-  // Use admin client if requested, otherwise standard server client
   const supabase = (orderData.isAdminAction && supabaseAdmin) ? supabaseAdmin : await createClient()
 
   try {
     if (!supabase) throw new Error("Supabase client not initialized")
 
-    // 1. Find or Create Customer
-    let customerId = null
-    
-    // Clean inputs to avoid query errors
     const phone = orderData.customerPhone?.trim() || "N/A"
     const email = orderData.customerEmail?.trim() || "N/A"
 
-    const { data: customer, error: fetchError } = await supabase
+    // 1. Find or Create/Update Customer
+    let customerId = null
+    const { data: customer } = await supabase
       .from('customers')
       .select('id')
-      .or(`phone.eq."${phone}",email.eq."${email}"`)
+      .or(`phone.eq.${phone},email.eq.${email}`)
       .maybeSingle()
-
-    if (fetchError) {
-      console.warn("Aviso ao buscar cliente (pode ser RLS):", fetchError)
-    }
 
     if (customer) {
       customerId = customer.id
+      // Atualiza o endereço do cliente se for novo
+      await supabase.from('customers').update({ 
+        address: orderData.notes,
+        name: orderData.customerName,
+        email: email
+      }).eq('id', customerId)
     } else {
-      const { data: newCustomer, error: customerInsertError } = await supabase
+      const { data: newCustomer, error: insertError } = await supabase
         .from('customers')
         .insert({
-          name: orderData.customerName || "Consumidor Final",
+          name: orderData.customerName,
           phone: phone,
           email: email,
+          address: orderData.notes,
           notes: 'Cliente captado via sistema Mazagão'
         })
         .select('id')
         .single()
       
-      if (customerInsertError) {
-        console.error("Erro ao criar cliente:", customerInsertError)
-        // Se falhar a criação do cliente, tentamos seguir sem o ID (o banco pode não permitir nulo dependendo do schema)
-      } else {
-        customerId = newCustomer?.id
-      }
+      if (insertError) throw insertError
+      customerId = newCustomer?.id
     }
 
     // 2. Create the Order
@@ -69,23 +66,17 @@ export async function createOrder(orderData: {
         status: 'pending',
         total: orderData.total || 115.00,
         subtotal: orderData.total || 115.00,
-        notes: orderData.notes || 'Operação Web Mazagão'
+        notes: orderData.notes // Endereço de entrega desta ordem
       })
       .select()
       .single()
 
-    if (orderError) {
-      console.error("Erro detalhado do Supabase ao criar ordem:", orderError)
-      throw new Error(orderError.message)
-    }
+    if (orderError) throw orderError
     
+    revalidatePath('/admin')
     return order
   } catch (error: any) {
-    console.error("Falha crítica na criação da ordem:", error)
-    // Retornamos um mock se estivermos em modo desenvolvimento/sem banco para não quebrar o fluxo
-    if (process.env.NODE_ENV === 'development') {
-      return { id: 'fallback-' + Date.now(), status: 'pending', total: orderData.total }
-    }
+    console.error("Falha na criação da ordem:", error)
     throw new Error(error.message || "Falha na comunicação com a Central de Comando.")
   }
 }
