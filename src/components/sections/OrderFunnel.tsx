@@ -37,7 +37,6 @@ export function OrderFunnel() {
     }
   })
 
-  // Efeito para detectar cliente recorrente pelo telefone
   const phoneValue = form.watch("phone")
   React.useEffect(() => {
     const checkCustomer = async () => {
@@ -57,7 +56,7 @@ export function OrderFunnel() {
               setLastAddress(customer.address)
               toast({
                 title: "CLIENTE RECORRENTE",
-                description: "Seu último endereço foi localizado para agilizar o pedido.",
+                description: "Seu último endereço foi localizado para agilizar o pedido no nosso sistema.",
               })
             }
           }
@@ -74,24 +73,23 @@ export function OrderFunnel() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Registrar Ordem no Banco
+      // 1. Registrar Ordem no Banco (Mantendo o endereço para controle interno)
       await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,
-        notes: lastAddress ? `Endereço Reutilizado: ${lastAddress}` : "Captado via Site Mazagão Gás",
+        notes: lastAddress || "Captado via Site Mazagão Gás",
         total: 115.00
       })
 
-      // 2. Gerar Mensagem com IA (incluindo o endereço se existir)
-      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir agora mesmo.${lastAddress ? ` Meu último endereço cadastrado foi: ${lastAddress}.` : ""}`
+      // 2. Gerar Mensagem com IA (ESTRITAMENTE SEM ENDEREÇO NA CONVERSA)
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir agora mesmo.`
       
       try {
         const response = await generatePersonalizedWhatsAppOrderMessage({
           customerName: values.name,
           customerPhone: values.phone,
-          customerEmail: values.email,
-          deliveryAddress: lastAddress || undefined
+          customerEmail: values.email
         })
         if (response?.whatsappMessage) finalMessage = response.whatsappMessage
       } catch (e) {
@@ -135,9 +133,9 @@ export function OrderFunnel() {
             <div className="bg-primary/5 border border-primary/20 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-left-4">
               <MapPin className="h-5 w-5 text-primary mt-1 shrink-0" />
               <div>
-                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Endereço Detectado</p>
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Localizamos seu endereço</p>
                 <p className="text-sm text-white/70 font-bold uppercase">{lastAddress}</p>
-                <p className="text-[9px] text-white/30 uppercase mt-1">Confirmaremos os detalhes no WhatsApp</p>
+                <p className="text-[9px] text-white/30 uppercase mt-1">Isso agiliza nossa entrega interna</p>
               </div>
             </div>
           )}

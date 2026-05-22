@@ -14,8 +14,6 @@ const PersonalizedWhatsAppOrderMessageInputSchema = z.object({
   customerName: z.string().describe('The full name of the customer.'),
   customerPhone: z.string().describe('The phone number of the customer.'),
   customerEmail: z.string().describe('The email address of the customer.'),
-  productName: z.string().optional().describe('The name of the product the customer viewed or intends to order. Optional.'),
-  deliveryAddress: z.string().optional().describe('The last known delivery address of the customer.'),
 });
 export type PersonalizedWhatsAppOrderMessageInput = z.infer<typeof PersonalizedWhatsAppOrderMessageInputSchema>;
 
@@ -35,7 +33,7 @@ const personalizedWhatsAppOrderMessagePrompt = ai.definePrompt({
   prompt: `You are an AI assistant for Mazagão Gás. Generate a professional and direct WhatsApp message for a customer.
 
 The message must strictly follow this structure:
-"Olá, vim pelo site da Mazagão Gás. Meu nome é {{{customerName}}}, meu e-mail é {{{customerEmail}}} e meu telefone é {{{customerPhone}}}. Gostaria de pedir agora mesmo.{{#if deliveryAddress}} Meu último endereço cadastrado foi: {{{deliveryAddress}}}.{{/if}}"
+"Olá, vim pelo site da Mazagão Gás. Meu nome é {{{customerName}}}, meu e-mail é {{{customerEmail}}} e meu telefone é {{{customerPhone}}}. Gostaria de pedir agora mesmo."
 
 Guidelines:
 - Do not add extra conversational filler.
