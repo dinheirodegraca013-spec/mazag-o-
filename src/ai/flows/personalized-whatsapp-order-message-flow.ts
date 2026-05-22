@@ -34,7 +34,7 @@ const personalizedWhatsAppOrderMessagePrompt = ai.definePrompt({
   prompt: `You are an AI assistant for Mazagão Gás. Generate a professional and direct WhatsApp message for a customer.
 
 The message must strictly follow this structure:
-"Olá, vim pelo site da Mazagão Gás. Meu nome é {{{customerName}}}, meu e-mail é {{{customerEmail}}} e meu telefone é {{{customerPhone}}}. Gostaria de pedir um Gás P13 Prata agora mesmo."
+"Olá, vim pelo site da Mazagão Gás. Meu nome é {{{customerName}}}, meu e-mail é {{{customerEmail}}} e meu telefone é {{{customerPhone}}}. Gostaria de pedir agora mesmo."
 
 Guidelines:
 - Do not add extra conversational filler.

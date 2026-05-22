@@ -48,7 +48,7 @@ export function OrderFunnel() {
 
       // 2. Gerar Mensagem Refinada
       // Fallback robusto se a IA falhar
-      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir um Gás P13 Prata agora mesmo.`
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir agora mesmo.`
       
       try {
         const response = await generatePersonalizedWhatsAppOrderMessage({
