@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -54,10 +55,6 @@ export function OrderFunnel() {
             }
             if (customer.address) {
               setLastAddress(customer.address)
-              toast({
-                title: "CLIENTE RECORRENTE",
-                description: "Seu último endereço foi localizado para agilizar o pedido no nosso sistema.",
-              })
             }
           }
         } catch (e) {
@@ -68,17 +65,17 @@ export function OrderFunnel() {
       }
     }
     checkCustomer()
-  }, [phoneValue, form, toast])
+  }, [phoneValue, form])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Registrar Ordem no Banco (Mantendo o endereço para controle interno)
+      // 1. Registrar Ordem no Banco (Mantendo o endereço para controle interno se já existir)
       await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,
-        notes: lastAddress || "Captado via Site Mazagão Gás",
+        notes: lastAddress || "Novo Pedido via Site Mazagão",
         total: 115.00
       })
 
@@ -126,16 +123,17 @@ export function OrderFunnel() {
             MÁQUINA DE <br/><span className="text-primary neon-text-green">PEDIDOS ATIVA</span>
           </h2>
           <p className="text-xl text-white/40 max-w-md font-bold uppercase tracking-widest leading-snug">
-            Seu pedido será registrado automaticamente em nossa central operacional de alta performance.
+            {lastAddress 
+              ? "Bem-vindo de volta! Seu pedido será processado com prioridade operacional." 
+              : "Seu pedido será registrado automaticamente em nossa central operacional de alta performance."}
           </p>
           
           {lastAddress && !isSuccess && (
             <div className="bg-primary/5 border border-primary/20 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-left-4">
               <MapPin className="h-5 w-5 text-primary mt-1 shrink-0" />
               <div>
-                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Localizamos seu endereço</p>
-                <p className="text-sm text-white/70 font-bold uppercase">{lastAddress}</p>
-                <p className="text-[9px] text-white/30 uppercase mt-1">Isso agiliza nossa entrega interna</p>
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Cliente Recorrente Detectado</p>
+                <p className="text-sm text-white/70 font-bold uppercase">Agilizando seu atendimento interno...</p>
               </div>
             </div>
           )}
@@ -158,10 +156,10 @@ export function OrderFunnel() {
                   <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
                     <CheckCircle2 className="h-10 w-10 text-primary" />
                   </div>
-                  <h3 className="text-3xl font-impact text-white uppercase tracking-tighter">ORDEM PROCESSADA</h3>
-                  <p className="text-white/40 text-xs font-black uppercase tracking-widest">Iniciando protocolo WhatsApp...</p>
+                  <h3 className="text-3xl font-impact text-white uppercase tracking-tighter">OBRIGADO POR PEDIR CONOSCO</h3>
+                  <p className="text-white/40 text-[10px] font-black uppercase tracking-widest">Protocolo iniciado. Fale com nosso atendente no WhatsApp.</p>
                   <NeonButton className="w-full h-16 rounded-none text-xl font-impact" variant="green" onClick={() => window.location.assign(whatsappUrl)}>
-                    <MessageCircle className="mr-3 h-6 w-6" /> ABRIR WHATSAPP
+                    <MessageCircle className="mr-3 h-6 w-6" /> IR PARA O WHATSAPP
                   </NeonButton>
                 </div>
               ) : (
