@@ -29,7 +29,8 @@ import {
   Phone,
   Mail,
   History,
-  MapPin
+  MapPin,
+  Pencil
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -48,6 +49,7 @@ import { deleteOrder } from "@/services/orders/delete-order"
 import { deleteCustomer } from "@/services/customers/delete-customer"
 import { getCustomerByPhone } from "@/services/customers/get-customer-by-phone"
 import { createOrder } from "@/services/order-service"
+import { updateOrder } from "@/services/orders/update-order"
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
 
@@ -62,13 +64,13 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = React.useState("overview")
   const [isAuthorizing, setIsAuthorizing] = React.useState(true)
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false)
+  const [isUpdatingOrder, setIsUpdatingOrder] = React.useState(false)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
-  const [isTransferring, setIsTransferring] = React.useState(false)
   const [isSearchingCustomer, setIsSearchingCustomer] = React.useState(false)
   
   const supabase = createClient()
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const [newOrder, setNewOrder] = React.useState({
     name: "",
@@ -77,6 +79,8 @@ export default function AdminDashboard() {
     notes: "",
     total: "115.00"
   })
+
+  const [editingOrder, setEditingOrder] = React.useState<any>(null)
 
   React.useEffect(() => {
     async function checkAccess() {
@@ -95,7 +99,6 @@ export default function AdminDashboard() {
     checkAccess()
   }, [router, supabase])
 
-  // Busca automática de cliente ao digitar o telefone
   const handlePhoneChange = async (val: string) => {
     setNewOrder(prev => ({ ...prev, phone: val }))
     if (val.length >= 10) {
@@ -202,6 +205,43 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleUpdateOrderDetails = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingOrder) return
+    setIsUpdatingOrder(true)
+    try {
+      await updateOrder({
+        orderId: editingOrder.id,
+        customerName: editingOrder.customerName,
+        customerPhone: editingOrder.customerPhone,
+        customerEmail: editingOrder.customerEmail,
+        notes: editingOrder.notes,
+        total: parseFloat(editingOrder.total)
+      })
+      toast({ title: "ORDEM ATUALIZADA", description: "Dados sincronizados com sucesso." })
+      setIsEditDialogOpen(false)
+      setEditingOrder(null)
+      refreshOrders()
+      refreshCustomers()
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "FALHA NA ATUALIZAÇÃO", description: error.message })
+    } finally {
+      setIsUpdatingOrder(false)
+    }
+  }
+
+  const openEditDialog = (order: any) => {
+    setEditingOrder({
+      id: order.id,
+      customerName: order.customer?.name || "",
+      customerPhone: order.customer?.phone || "",
+      customerEmail: order.customer?.email || "",
+      notes: order.notes || "",
+      total: order.total?.toString() || "0.00"
+    })
+    setIsEditDialogOpen(true)
+  }
+
   const exportToCSV = (data: any[], filename: string) => {
     if (!data || !data.length) return
     const headers = Object.keys(data[0]).join(",")
@@ -219,39 +259,10 @@ export default function AdminDashboard() {
     toast({ title: "EXPORTAÇÃO CONCLUÍDA", description: "Arquivo baixado com sucesso." })
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setIsTransferring(true)
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      try {
-        await new Promise(r => setTimeout(r, 1500))
-        toast({ title: "IMPORTAÇÃO FINALIZADA", description: "Os dados foram integrados à Central." })
-        refreshCustomers()
-        refreshOrders()
-      } catch (err) {
-        toast({ variant: "destructive", title: "ERRO NA IMPORTAÇÃO", description: "Formato de arquivo inválido." })
-      } finally {
-        setIsTransferring(false)
-        if (fileInputRef.current) fileInputRef.current.value = ""
-      }
-    }
-    reader.readAsText(file)
-  }
-
   if (isAuthorizing) return <div className="flex h-screen w-full items-center justify-center bg-background"><Activity className="h-12 w-12 text-primary animate-pulse" /></div>
 
   return (
     <div className="flex h-screen bg-background overflow-hidden w-full">
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileUpload} 
-        className="hidden" 
-        accept=".csv,.json"
-      />
-
       <Sidebar className="border-r border-white/10 glass-morphism">
         <SidebarHeader className="p-8">
           <Logo variant="full" className="scale-75 origin-left" />
@@ -303,15 +314,13 @@ export default function AdminDashboard() {
           
           <div className="flex flex-wrap gap-3">
             {activeTab !== 'overview' && (
-              <>
-                <Button 
-                  variant="outline" 
-                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-white/10"
-                  onClick={() => exportToCSV(activeTab === 'orders' ? orders : customers, activeTab)}
-                >
-                  <Download className="mr-2 h-4 w-4" /> EXPORTAR CSV
-                </Button>
-              </>
+              <Button 
+                variant="outline" 
+                className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-white/10"
+                onClick={() => exportToCSV(activeTab === 'orders' ? orders : customers, activeTab)}
+              >
+                <Download className="mr-2 h-4 w-4" /> EXPORTAR CSV
+              </Button>
             )}
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -463,12 +472,21 @@ export default function AdminDashboard() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-right px-8">
-                          <div className="flex items-center justify-end gap-6">
-                            <div className="text-right">
+                          <div className="flex items-center justify-end gap-3">
+                            <div className="text-right mr-4">
                               <p className="font-impact text-primary text-3xl tracking-tighter">R$ {order.total?.toFixed(2)}</p>
                               <p className="text-[9px] text-white/20 font-black uppercase tracking-widest">{order.payment_method || 'A DEFINIR'}</p>
                             </div>
                             
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-white/40 hover:text-primary hover:bg-primary/5"
+                              onClick={() => openEditDialog(order)}
+                            >
+                              <Pencil className="h-5 w-5" />
+                            </Button>
+
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="icon" className="text-destructive/40 hover:text-destructive hover:bg-destructive/5">
@@ -498,6 +516,66 @@ export default function AdminDashboard() {
                 </TableBody>
               </Table>
             </Card>
+
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogContent className="glass-morphism border-white/10 text-white rounded-none sm:max-w-[425px]">
+                <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">EDITAR PEDIDO</DialogTitle></DialogHeader>
+                {editingOrder && (
+                  <form onSubmit={handleUpdateOrderDetails} className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">NOME DO CLIENTE</label>
+                      <Input 
+                        value={editingOrder.customerName} 
+                        onChange={(e) => setEditingOrder({...editingOrder, customerName: e.target.value})} 
+                        className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
+                        required 
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">TELEFONE</label>
+                        <Input 
+                          value={editingOrder.customerPhone} 
+                          onChange={(e) => setEditingOrder({...editingOrder, customerPhone: e.target.value})} 
+                          className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">VALOR (R$)</label>
+                        <Input 
+                          value={editingOrder.total} 
+                          onChange={(e) => setEditingOrder({...editingOrder, total: e.target.value})} 
+                          className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
+                          required 
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">E-MAIL</label>
+                      <Input 
+                        value={editingOrder.customerEmail} 
+                        onChange={(e) => setEditingOrder({...editingOrder, customerEmail: e.target.value})} 
+                        className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-primary tracking-widest">ENDEREÇO DE ENTREGA</label>
+                      <Input 
+                        value={editingOrder.notes} 
+                        onChange={(e) => setEditingOrder({...editingOrder, notes: e.target.value})} 
+                        className="bg-white/5 border-primary/20 rounded-none h-12 text-white" 
+                        required 
+                      />
+                    </div>
+                    <DialogFooter className="pt-4">
+                      <NeonButton type="submit" variant="green" className="w-full h-14 rounded-none text-[12px] font-impact" disabled={isUpdatingOrder}>
+                        {isUpdatingOrder ? <Loader2 className="animate-spin h-5 w-5" /> : "SALVAR ALTERAÇÕES"}
+                      </NeonButton>
+                    </DialogFooter>
+                  </form>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 
