@@ -24,13 +24,12 @@ import {
   Trash2,
   AlertTriangle,
   Download,
-  Upload,
   UserCheck,
   Phone,
-  Mail,
-  History,
   MapPin,
-  Pencil
+  Pencil,
+  History,
+  FileText
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -40,6 +39,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { useOrdersRealtime } from "@/hooks/realtime/use-orders-realtime"
 import { useCustomersRealtime } from "@/hooks/realtime/use-customers-realtime"
@@ -50,6 +50,7 @@ import { deleteCustomer } from "@/services/customers/delete-customer"
 import { getCustomerByPhone } from "@/services/customers/get-customer-by-phone"
 import { createOrder } from "@/services/order-service"
 import { updateOrder } from "@/services/orders/update-order"
+import { updateCustomer } from "@/services/customers/update-customer"
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
 
@@ -65,8 +66,10 @@ export default function AdminDashboard() {
   const [isAuthorizing, setIsAuthorizing] = React.useState(true)
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false)
   const [isUpdatingOrder, setIsUpdatingOrder] = React.useState(false)
+  const [isUpdatingCustomer, setIsUpdatingCustomer] = React.useState(false)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const [isEditCustomerOpen, setIsEditCustomerOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [isSearchingCustomer, setIsSearchingCustomer] = React.useState(false)
   
@@ -81,6 +84,7 @@ export default function AdminDashboard() {
   })
 
   const [editingOrder, setEditingOrder] = React.useState<any>(null)
+  const [editingCustomer, setEditingCustomer] = React.useState<any>(null)
 
   React.useEffect(() => {
     async function checkAccess() {
@@ -230,7 +234,31 @@ export default function AdminDashboard() {
     }
   }
 
-  const openEditDialog = (order: any) => {
+  const handleUpdateCustomerDetails = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCustomer) return
+    setIsUpdatingCustomer(true)
+    try {
+      await updateCustomer({
+        id: editingCustomer.id,
+        name: editingCustomer.name,
+        phone: editingCustomer.phone,
+        email: editingCustomer.email,
+        address: editingCustomer.address,
+        notes: editingCustomer.notes
+      })
+      toast({ title: "CLIENTE ATUALIZADO", description: "Dados de CRM sincronizados." })
+      setIsEditCustomerOpen(false)
+      setEditingCustomer(null)
+      refreshCustomers()
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "FALHA NA ATUALIZAÇÃO", description: error.message })
+    } finally {
+      setIsUpdatingCustomer(false)
+    }
+  }
+
+  const openEditOrderDialog = (order: any) => {
     setEditingOrder({
       id: order.id,
       customerName: order.customer?.name || "",
@@ -240,6 +268,18 @@ export default function AdminDashboard() {
       total: order.total?.toString() || "0.00"
     })
     setIsEditDialogOpen(true)
+  }
+
+  const openEditCustomerDialog = (customer: any) => {
+    setEditingCustomer({
+      id: customer.id,
+      name: customer.name || "",
+      phone: customer.phone || "",
+      email: customer.email || "",
+      address: customer.address || "",
+      notes: customer.notes || ""
+    })
+    setIsEditCustomerOpen(true)
   }
 
   const exportToCSV = (data: any[], filename: string) => {
@@ -308,7 +348,7 @@ export default function AdminDashboard() {
             </h1>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">OPERACIONAL ATIVO</Badge>
-              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">v2.1 SMART FILL</span>
+              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">v2.5 CRM & SMART SYNC</span>
             </div>
           </div>
           
@@ -482,7 +522,7 @@ export default function AdminDashboard() {
                               variant="ghost" 
                               size="icon" 
                               className="text-white/40 hover:text-primary hover:bg-primary/5"
-                              onClick={() => openEditDialog(order)}
+                              onClick={() => openEditOrderDialog(order)}
                             >
                               <Pencil className="h-5 w-5" />
                             </Button>
@@ -516,66 +556,6 @@ export default function AdminDashboard() {
                 </TableBody>
               </Table>
             </Card>
-
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-              <DialogContent className="glass-morphism border-white/10 text-white rounded-none sm:max-w-[425px]">
-                <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">EDITAR PEDIDO</DialogTitle></DialogHeader>
-                {editingOrder && (
-                  <form onSubmit={handleUpdateOrderDetails} className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">NOME DO CLIENTE</label>
-                      <Input 
-                        value={editingOrder.customerName} 
-                        onChange={(e) => setEditingOrder({...editingOrder, customerName: e.target.value})} 
-                        className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
-                        required 
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">TELEFONE</label>
-                        <Input 
-                          value={editingOrder.customerPhone} 
-                          onChange={(e) => setEditingOrder({...editingOrder, customerPhone: e.target.value})} 
-                          className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">VALOR (R$)</label>
-                        <Input 
-                          value={editingOrder.total} 
-                          onChange={(e) => setEditingOrder({...editingOrder, total: e.target.value})} 
-                          className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
-                          required 
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">E-MAIL</label>
-                      <Input 
-                        value={editingOrder.customerEmail} 
-                        onChange={(e) => setEditingOrder({...editingOrder, customerEmail: e.target.value})} 
-                        className="bg-white/5 border-white/10 rounded-none h-12 text-white" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-primary tracking-widest">ENDEREÇO DE ENTREGA</label>
-                      <Input 
-                        value={editingOrder.notes} 
-                        onChange={(e) => setEditingOrder({...editingOrder, notes: e.target.value})} 
-                        className="bg-white/5 border-primary/20 rounded-none h-12 text-white" 
-                        required 
-                      />
-                    </div>
-                    <DialogFooter className="pt-4">
-                      <NeonButton type="submit" variant="green" className="w-full h-14 rounded-none text-[12px] font-impact" disabled={isUpdatingOrder}>
-                        {isUpdatingOrder ? <Loader2 className="animate-spin h-5 w-5" /> : "SALVAR ALTERAÇÕES"}
-                      </NeonButton>
-                    </DialogFooter>
-                  </form>
-                )}
-              </DialogContent>
-            </Dialog>
           </div>
         )}
 
@@ -610,6 +590,8 @@ export default function AdminDashboard() {
                   ) : (
                     filteredCustomers.map(customer => {
                       const customerOrders = orders.filter(o => o.customer_id === customer.id)
+                      const uniqueAddresses = Array.from(new Set(customerOrders.map(o => o.notes).filter(Boolean)))
+                      
                       return (
                         <TableRow key={customer.id} className="border-white/5 hover:bg-white/[0.03]">
                           <TableCell className="px-8 py-6">
@@ -634,12 +616,12 @@ export default function AdminDashboard() {
                               </div>
                               <div className="flex items-center gap-2 text-white/40">
                                 <MapPin className="h-3 w-3" />
-                                <span className="text-[10px] font-medium uppercase">{customer.address || 'SEM ENDEREÇO REGISTRADO'}</span>
+                                <span className="text-[10px] font-medium uppercase truncate max-w-[200px]">{customer.address || 'SEM ENDEREÇO PRINCIPAL'}</span>
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="text-right px-8">
-                            <div className="flex items-center justify-end gap-6">
+                            <div className="flex items-center justify-end gap-3">
                               <Dialog>
                                 <DialogTrigger asChild>
                                   <Button variant="outline" size="sm" className="bg-white/5 border-white/10 text-white text-[10px] font-black uppercase h-8">
@@ -647,31 +629,56 @@ export default function AdminDashboard() {
                                   </Button>
                                 </DialogTrigger>
                                 <DialogContent className="glass-morphism border-white/10 text-white rounded-none max-w-2xl">
-                                  <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">HISTÓRICO: {customer.name}</DialogTitle></DialogHeader>
-                                  <div className="max-h-[400px] overflow-y-auto">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead className="text-[9px] uppercase font-black">DATA</TableHead>
-                                          <TableHead className="text-[9px] uppercase font-black">ENDEREÇO</TableHead>
-                                          <TableHead className="text-[9px] uppercase font-black">STATUS</TableHead>
-                                          <TableHead className="text-right text-[9px] uppercase font-black">TOTAL</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {customerOrders.map(o => (
-                                          <TableRow key={o.id}>
-                                            <TableCell className="text-[10px] font-bold">{new Date(o.created_at).toLocaleDateString()}</TableCell>
-                                            <TableCell className="text-[10px] max-w-[200px] truncate">{o.notes}</TableCell>
-                                            <TableCell><Badge className="text-[8px] font-black">{o.status}</Badge></TableCell>
-                                            <TableCell className="text-right font-impact text-primary">R$ {o.total.toFixed(2)}</TableCell>
+                                  <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">DETALHES: {customer.name}</DialogTitle></DialogHeader>
+                                  <div className="space-y-8 max-h-[500px] overflow-y-auto pr-2">
+                                    
+                                    <div className="space-y-4">
+                                      <h3 className="font-impact text-primary uppercase text-lg flex items-center gap-2"><MapPin className="h-5 w-5" /> HISTÓRICO DE ENDEREÇOS</h3>
+                                      <div className="grid gap-2">
+                                        {uniqueAddresses.length > 0 ? uniqueAddresses.map((addr, idx) => (
+                                          <div key={idx} className="bg-white/5 border border-white/10 p-3 rounded-none flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">{idx + 1}</div>
+                                            <p className="text-xs uppercase font-bold text-white/70">{addr}</p>
+                                          </div>
+                                        )) : <p className="text-xs text-white/30 uppercase italic">Nenhum endereço de entrega registrado.</p>}
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                      <h3 className="font-impact text-white uppercase text-lg flex items-center gap-2"><FileText className="h-5 w-5" /> ÚLTIMAS TRANSAÇÕES</h3>
+                                      <Table>
+                                        <TableHeader className="bg-white/5">
+                                          <TableRow>
+                                            <TableHead className="text-[9px] uppercase font-black">DATA</TableHead>
+                                            <TableHead className="text-[9px] uppercase font-black">ENDEREÇO</TableHead>
+                                            <TableHead className="text-[9px] uppercase font-black">STATUS</TableHead>
+                                            <TableHead className="text-right text-[9px] uppercase font-black">TOTAL</TableHead>
                                           </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {customerOrders.map(o => (
+                                            <TableRow key={o.id} className="border-white/5">
+                                              <TableCell className="text-[10px] font-bold">{new Date(o.created_at).toLocaleDateString()}</TableCell>
+                                              <TableCell className="text-[10px] max-w-[150px] truncate uppercase">{o.notes}</TableCell>
+                                              <TableCell><Badge className="text-[8px] font-black uppercase">{o.status}</Badge></TableCell>
+                                              <TableCell className="text-right font-impact text-primary">R$ {o.total.toFixed(2)}</TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
                                   </div>
                                 </DialogContent>
                               </Dialog>
+
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-white/40 hover:text-primary hover:bg-primary/5"
+                                onClick={() => openEditCustomerDialog(customer)}
+                              >
+                                <Pencil className="h-5 w-5" />
+                              </Button>
 
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -705,6 +712,82 @@ export default function AdminDashboard() {
             </Card>
           </div>
         )}
+
+        {/* DIÁLOGO: EDITAR PEDIDO */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="glass-morphism border-white/10 text-white rounded-none sm:max-w-[425px]">
+            <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">EDITAR PEDIDO</DialogTitle></DialogHeader>
+            {editingOrder && (
+              <form onSubmit={handleUpdateOrderDetails} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">NOME DO CLIENTE</label>
+                  <Input value={editingOrder.customerName} onChange={(e) => setEditingOrder({...editingOrder, customerName: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">TELEFONE</label>
+                    <Input value={editingOrder.customerPhone} onChange={(e) => setEditingOrder({...editingOrder, customerPhone: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">VALOR (R$)</label>
+                    <Input value={editingOrder.total} onChange={(e) => setEditingOrder({...editingOrder, total: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white" required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">E-MAIL</label>
+                  <Input value={editingOrder.customerEmail} onChange={(e) => setEditingOrder({...editingOrder, customerEmail: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-primary tracking-widest">ENDEREÇO DE ENTREGA</label>
+                  <Input value={editingOrder.notes} onChange={(e) => setEditingOrder({...editingOrder, notes: e.target.value})} className="bg-white/5 border-primary/20 rounded-none h-12 text-white" required />
+                </div>
+                <DialogFooter className="pt-4">
+                  <NeonButton type="submit" variant="green" className="w-full h-14 rounded-none text-[12px] font-impact" disabled={isUpdatingOrder}>
+                    {isUpdatingOrder ? <Loader2 className="animate-spin h-5 w-5" /> : "SALVAR ALTERAÇÕES"}
+                  </NeonButton>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* DIÁLOGO: EDITAR CLIENTE (CRM) */}
+        <Dialog open={isEditCustomerOpen} onOpenChange={setIsEditCustomerOpen}>
+          <DialogContent className="glass-morphism border-white/10 text-white rounded-none sm:max-w-[425px]">
+            <DialogHeader><DialogTitle className="font-impact text-2xl uppercase">EDITAR CADASTRO CRM</DialogTitle></DialogHeader>
+            {editingCustomer && (
+              <form onSubmit={handleUpdateCustomerDetails} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">NOME COMPLETO</label>
+                  <Input value={editingCustomer.name} onChange={(e) => setEditingCustomer({...editingCustomer, name: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white uppercase font-bold" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">TELEFONE</label>
+                    <Input value={editingCustomer.phone} onChange={(e) => setEditingCustomer({...editingCustomer, phone: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">E-MAIL</label>
+                    <Input value={editingCustomer.email} onChange={(e) => setEditingCustomer({...editingCustomer, email: e.target.value})} className="bg-white/5 border-white/10 rounded-none h-12 text-white lowercase" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-primary tracking-widest">ENDEREÇO PRINCIPAL</label>
+                  <Input value={editingCustomer.address} onChange={(e) => setEditingCustomer({...editingCustomer, address: e.target.value})} className="bg-white/5 border-primary/20 rounded-none h-12 text-white uppercase" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-white/40 tracking-widest">NOTAS OPERACIONAIS</label>
+                  <Textarea value={editingCustomer.notes} onChange={(e) => setEditingCustomer({...editingCustomer, notes: e.target.value})} className="bg-white/5 border-white/10 rounded-none min-h-[80px] text-white text-xs uppercase" placeholder="Observações sobre o cliente..." />
+                </div>
+                <DialogFooter className="pt-4">
+                  <NeonButton type="submit" variant="green" className="w-full h-14 rounded-none text-[12px] font-impact" disabled={isUpdatingCustomer}>
+                    {isUpdatingCustomer ? <Loader2 className="animate-spin h-5 w-5" /> : "ATUALIZAR CRM"}
+                  </NeonButton>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )
