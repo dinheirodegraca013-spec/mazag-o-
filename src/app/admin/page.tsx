@@ -34,7 +34,8 @@ import {
   Flame,
   TrendingUp,
   Clock,
-  Upload
+  DollarSign,
+  CalendarDays
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -56,18 +57,23 @@ import { getCustomerByPhone } from "@/services/customers/get-customer-by-phone"
 import { createOrder } from "@/services/order-service"
 import { updateOrder } from "@/services/orders/update-order"
 import { updateCustomer } from "@/services/customers/update-customer"
-import { analyzeNeighborhoodDemand } from "@/ai/flows/neighborhood-analysis-flow"
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts"
+import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, Area, AreaChart, CartesianGrid } from "recharts"
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay } from "date-fns"
+import { ptBR } from "date-fns/locale"
 
 type OrderStatus = Database['public']['Tables']['orders']['Row']['status']
 
 const chartConfig = {
   count: {
-    label: "Pedidos",
+    label: "Quantidade",
     color: "hsl(var(--primary))",
+  },
+  revenue: {
+    label: "Faturamento",
+    color: "hsl(var(--secondary))",
   },
 } satisfies ChartConfig
 
@@ -87,11 +93,6 @@ export default function AdminDashboard() {
   const [isEditCustomerOpen, setIsEditCustomerOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [isSearchingCustomer, setIsSearchingCustomer] = React.useState(false)
-  
-  // Estados para Gráficos
-  const [isAnalyzingDemand, setIsAnalyzingDemand] = React.useState(false)
-  const [neighborhoodData, setNeighborhoodData] = React.useState<any[]>([])
-  const [aiInsights, setAiInsights] = React.useState("")
   
   const supabase = createClient()
 
@@ -123,33 +124,6 @@ export default function AdminDashboard() {
     checkAccess()
   }, [router, supabase])
 
-  const runDemandAnalysis = React.useCallback(async () => {
-    if (orders.length === 0) return
-    setIsAnalyzingDemand(true)
-    try {
-      const addresses = orders.map(o => o.notes || "").filter(a => a.length > 5)
-      const analysis = await analyzeNeighborhoodDemand({ addresses })
-      setNeighborhoodData(analysis.neighborhoods)
-      setAiInsights(analysis.insights)
-      if (analysis.neighborhoods.length > 0) {
-        toast({ title: "ANÁLISE CONCLUÍDA", description: "Mapa de calor de demanda atualizado." })
-      } else {
-        toast({ variant: "destructive", title: "SEM DADOS", description: "Não foram encontrados endereços válidos para análise." })
-      }
-    } catch (err) {
-      console.error(err)
-      toast({ variant: "destructive", title: "FALHA NA IA", description: "Não foi possível processar o mapa de calor." })
-    } finally {
-      setIsAnalyzingDemand(false)
-    }
-  }, [orders, toast])
-
-  React.useEffect(() => {
-    if (activeTab === 'charts' && neighborhoodData.length === 0 && !isLoadingOrders) {
-      runDemandAnalysis()
-    }
-  }, [activeTab, neighborhoodData.length, runDemandAnalysis, isLoadingOrders])
-
   const stats = React.useMemo(() => {
     return {
       totalOrders: orders.length,
@@ -159,14 +133,25 @@ export default function AdminDashboard() {
     }
   }, [orders, customers])
 
-  const hourlyData = React.useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, i) => ({ hour: `${i}h`, count: 0 }))
-    orders.forEach(o => {
-      const h = new Date(o.created_at).getHours()
-      hours[h].count++
+  // Lógica de Dados Mensais por Dia
+  const monthlyStats = React.useMemo(() => {
+    const today = new Date()
+    const start = startOfMonth(today)
+    const end = endOfMonth(today)
+    const days = eachDayOfInterval({ start, end })
+
+    return days.map(day => {
+      const dayOrders = orders.filter(o => isSameDay(new Date(o.created_at), day))
+      const dayCustomers = customers.filter(c => isSameDay(new Date(c.created_at), day))
+      
+      return {
+        date: format(day, 'dd/MM'),
+        orderCount: dayOrders.length,
+        revenue: dayOrders.reduce((acc, curr) => acc + (curr.total || 0), 0),
+        customerCount: dayCustomers.length
+      }
     })
-    return hours.filter(h => h.count > 0 || (parseInt(h.hour) >= 8 && parseInt(h.hour) <= 22))
-  }, [orders])
+  }, [orders, customers])
 
   const filteredOrders = React.useMemo(() => {
     if (!searchTerm) return orders
@@ -404,7 +389,7 @@ export default function AdminDashboard() {
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 gap-6">
           <div className="space-y-1">
             <h1 className="font-impact text-4xl md:text-6xl text-white uppercase tracking-tighter">
-              {activeTab === 'overview' ? 'PAINEL DE CONTROLE' : activeTab === 'orders' ? 'GERENCIAR PEDIDOS' : activeTab === 'charts' ? 'INTELIGÊNCIA IA' : 'BASE DE CLIENTES'}
+              {activeTab === 'overview' ? 'PAINEL DE CONTROLE' : activeTab === 'orders' ? 'GERENCIAR PEDIDOS' : activeTab === 'charts' ? 'PERFORMANCE MENSAL' : 'BASE DE CLIENTES'}
             </h1>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">OPERACIONAL ATIVO</Badge>
@@ -413,18 +398,6 @@ export default function AdminDashboard() {
           </div>
           
           <div className="flex flex-wrap gap-3">
-            {activeTab === 'charts' && (
-              <Button 
-                variant="outline" 
-                className="bg-primary/10 border-primary/20 text-primary rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-primary/20"
-                onClick={runDemandAnalysis}
-                disabled={isAnalyzingDemand}
-              >
-                {isAnalyzingDemand ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrendingUp className="mr-2 h-4 w-4" />} 
-                ATUALIZAR ANÁLISE IA
-              </Button>
-            )}
-
             {(activeTab === 'orders' || activeTab === 'customers') && (
               <div className="flex gap-2">
                 <Button 
@@ -530,85 +503,81 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'charts' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid lg:grid-cols-2 gap-8">
-              {/* Mapa de Calor de Bairros */}
-              <Card className="glass-morphism border-white/5 rounded-none p-6">
-                <CardHeader className="px-0 pt-0 pb-6 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
-                      <Flame className="text-primary h-6 w-6" /> MAPA DE CALOR: DEMANDA
-                    </CardTitle>
-                    <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Concentração de pedidos por região em Guarujá</p>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-0 h-[350px]">
-                  {isAnalyzingDemand ? (
-                    <div className="h-full flex flex-col items-center justify-center space-y-4">
-                      <Loader2 className="h-12 w-12 text-primary animate-spin" />
-                      <p className="text-[10px] font-black text-primary uppercase animate-pulse">IA Analisando Endereços...</p>
-                    </div>
-                  ) : neighborhoodData.length > 0 ? (
-                    <ChartContainer config={chartConfig} className="h-full w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={neighborhoodData} layout="vertical" margin={{ left: 20, right: 40 }}>
-                          <XAxis type="number" hide />
-                          <YAxis 
-                            dataKey="name" 
-                            type="category" 
-                            width={100} 
-                            axisLine={false} 
-                            tickLine={false}
-                            tick={{ fill: 'white', fontSize: 10, fontWeight: 'bold' }}
-                          />
-                          <ChartTooltip 
-                            cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
-                            content={<ChartTooltipContent hideLabel />} 
-                          />
-                          <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                            {neighborhoodData.map((entry, index) => (
-                              <Cell key={index} fill={entry.intensity > 70 ? '#b8ff00' : entry.intensity > 30 ? '#1d22d8' : '#333'} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-white/20 uppercase font-black text-xs text-center px-6">
-                      {isLoadingOrders ? "Sincronizando dados..." : "Sem endereços suficientes para análise regional."}
-                    </div>
-                  )}
-                </CardContent>
-                {aiInsights && (
-                  <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-none">
-                    <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">Insight Estratégico IA:</p>
-                    <p className="text-xs text-white/80 italic">"{aiInsights}"</p>
-                  </div>
-                )}
-              </Card>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            {/* Gráfico 1: Quantidade de Pedidos Mensal */}
+            <Card className="glass-morphism border-white/5 rounded-none p-6">
+              <CardHeader className="px-0 pt-0 pb-6">
+                <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
+                  <ShoppingBag className="text-primary h-6 w-6" /> PEDIDOS POR DIA (MÊS ATUAL)
+                </CardTitle>
+                <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Volume diário de entregas realizadas</p>
+              </CardHeader>
+              <CardContent className="px-0 h-[300px]">
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyStats} margin={{ top: 20, bottom: 20 }}>
+                      <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <ChartTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
+                      <Bar dataKey="orderCount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </CardContent>
+            </Card>
 
-              {/* Gráfico de Horários de Pico */}
-              <Card className="glass-morphism border-white/5 rounded-none p-6">
-                <CardHeader className="px-0 pt-0 pb-6">
-                  <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
-                    <Clock className="text-secondary h-6 w-6" /> PICOS DE OPERAÇÃO
-                  </CardTitle>
-                  <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Distribuição de pedidos por hora do dia</p>
-                </CardHeader>
-                <CardContent className="px-0 h-[350px]">
-                  <ChartContainer config={chartConfig} className="h-full w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={hourlyData} margin={{ top: 20, bottom: 20 }}>
-                        <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                        <ChartTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
-                        <Bar dataKey="count" fill="#1d22d8" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
-            </div>
+            {/* Gráfico 2: Faturamento Mensal */}
+            <Card className="glass-morphism border-white/5 rounded-none p-6">
+              <CardHeader className="px-0 pt-0 pb-6">
+                <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
+                  <DollarSign className="text-primary h-6 w-6" /> FATURAMENTO DIÁRIO (R$)
+                </CardTitle>
+                <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Evolução financeira da operação</p>
+              </CardHeader>
+              <CardContent className="px-0 h-[300px]">
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlyStats} margin={{ top: 20, bottom: 20 }}>
+                      <defs>
+                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={3} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+
+            {/* Gráfico 3: Novos Clientes Mensal */}
+            <Card className="glass-morphism border-white/5 rounded-none p-6">
+              <CardHeader className="px-0 pt-0 pb-6">
+                <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
+                  <UserCheck className="text-secondary h-6 w-6" /> AQUISIÇÃO DE CLIENTES (MÊS)
+                </CardTitle>
+                <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Novos cadastros realizados no CRM por dia</p>
+              </CardHeader>
+              <CardContent className="px-0 h-[300px]">
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyStats} margin={{ top: 20, bottom: 20 }}>
+                      <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <ChartTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
+                      <Bar dataKey="customerCount" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </CardContent>
+            </Card>
           </div>
         )}
 
