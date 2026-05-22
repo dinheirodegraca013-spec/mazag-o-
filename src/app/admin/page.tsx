@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -24,7 +23,9 @@ import {
   Filter,
   UserCheck,
   Mail,
-  Phone
+  Phone,
+  Trash2,
+  AlertTriangle
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -32,14 +33,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useOrdersRealtime } from "@/hooks/realtime/use-orders-realtime"
 import { useCustomersRealtime } from "@/hooks/realtime/use-customers-realtime"
 import { createClient } from "@/lib/supabase/client"
 import { updateOrderStatus } from "@/services/orders/update-order-status"
+import { deleteOrder } from "@/services/orders/delete-order"
+import { deleteCustomer } from "@/services/customers/delete-customer"
 import { createOrder } from "@/services/order-service"
 import { Database } from "@/types/database"
+import { Button } from "@/components/ui/button"
 
 type OrderStatus = Database['public']['Tables']['orders']['Row']['status']
 
@@ -92,21 +97,21 @@ export default function AdminDashboard() {
   }, [orders, customers])
 
   const filteredOrders = React.useMemo(() => {
-    if (!searchTerm || activeTab !== 'orders') return orders
+    if (!searchTerm) return orders
     return orders.filter(o => 
       o.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       o.id.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  }, [orders, searchTerm, activeTab])
+  }, [orders, searchTerm])
 
   const filteredCustomers = React.useMemo(() => {
-    if (!searchTerm || activeTab !== 'customers') return customers
+    if (!searchTerm) return customers
     return customers.filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.phone?.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  }, [customers, searchTerm, activeTab])
+  }, [customers, searchTerm])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -119,6 +124,26 @@ export default function AdminDashboard() {
       toast({ title: "OPERACIONAL", description: `Status atualizado para ${newStatus.toUpperCase()}.` })
     } catch (error) {
       toast({ variant: "destructive", title: "ERRO", description: "Falha na sincronização." })
+    }
+  }
+
+  const handleDeleteOrder = async (id: string) => {
+    try {
+      await deleteOrder(id)
+      toast({ title: "ORDEM EXCLUÍDA", description: "O registro foi removido do sistema." })
+      refreshOrders()
+    } catch (error) {
+      toast({ variant: "destructive", title: "ERRO AO EXCLUIR", description: "Apenas administradores podem realizar esta ação." })
+    }
+  }
+
+  const handleDeleteCustomer = async (id: string) => {
+    try {
+      await deleteCustomer(id)
+      toast({ title: "CLIENTE EXCLUÍDO", description: "O registro do cliente foi removido." })
+      refreshCustomers()
+    } catch (error) {
+      toast({ variant: "destructive", title: "ERRO AO EXCLUIR", description: "Verifique se o cliente possui pedidos vinculados." })
     }
   }
 
@@ -302,7 +327,7 @@ export default function AdminDashboard() {
                   <TableRow className="border-white/5">
                     <TableHead className="px-8 text-[10px] font-black uppercase text-white/40">DATA / CLIENTE</TableHead>
                     <TableHead className="text-[10px] font-black uppercase text-white/40">FLUXO LOGÍSTICO</TableHead>
-                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">INVESTIMENTO</TableHead>
+                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">INVESTIMENTO / AÇÃO</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -336,8 +361,34 @@ export default function AdminDashboard() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-right px-8">
-                          <p className="font-impact text-primary text-3xl tracking-tighter">R$ {order.total?.toFixed(2)}</p>
-                          <p className="text-[9px] text-white/20 font-black uppercase tracking-widest">{order.payment_method || 'A DEFINIR'}</p>
+                          <div className="flex items-center justify-end gap-6">
+                            <div className="text-right">
+                              <p className="font-impact text-primary text-3xl tracking-tighter">R$ {order.total?.toFixed(2)}</p>
+                              <p className="text-[9px] text-white/20 font-black uppercase tracking-widest">{order.payment_method || 'A DEFINIR'}</p>
+                            </div>
+                            
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive/40 hover:text-destructive hover:bg-destructive/5">
+                                  <Trash2 className="h-5 w-5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="glass-morphism border-white/10 text-white rounded-none">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="font-impact text-2xl uppercase flex items-center gap-2">
+                                    <AlertTriangle className="text-destructive" /> EXCLUIR REGISTRO?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription className="text-white/60 uppercase text-[10px] font-black tracking-widest">
+                                    Esta ação é irreversível. O pedido será removido permanentemente da base Mazagão.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="bg-white/5 border-white/10 text-white uppercase text-[10px] font-black rounded-none">CANCELAR</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-destructive text-white uppercase text-[10px] font-black rounded-none hover:bg-destructive/80">CONFIRMAR EXCLUSÃO</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -368,7 +419,7 @@ export default function AdminDashboard() {
                   <TableRow className="border-white/5">
                     <TableHead className="px-8 text-[10px] font-black uppercase text-white/40">CADASTRO / CLIENTE</TableHead>
                     <TableHead className="text-[10px] font-black uppercase text-white/40">INFORMAÇÕES DE CONTATO</TableHead>
-                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">STATUS CRM</TableHead>
+                    <TableHead className="text-right px-8 text-[10px] font-black uppercase text-white/40">STATUS CRM / AÇÃO</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -406,10 +457,36 @@ export default function AdminDashboard() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right px-8">
-                          <Badge className="bg-primary/10 text-primary border-primary/20 uppercase text-[9px] font-black tracking-widest py-1 px-3">
-                            {customer.active ? 'FIDELIDADE ATIVA' : 'INATIVO'}
-                          </Badge>
-                          <p className="text-[9px] text-white/20 font-black uppercase tracking-widest mt-2">SISTEMA INTEGRADO</p>
+                          <div className="flex items-center justify-end gap-6">
+                            <div>
+                              <Badge className="bg-primary/10 text-primary border-primary/20 uppercase text-[9px] font-black tracking-widest py-1 px-3">
+                                {customer.active ? 'FIDELIDADE ATIVA' : 'INATIVO'}
+                              </Badge>
+                              <p className="text-[9px] text-white/20 font-black uppercase tracking-widest mt-2">SISTEMA INTEGRADO</p>
+                            </div>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive/40 hover:text-destructive hover:bg-destructive/5">
+                                  <Trash2 className="h-5 w-5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="glass-morphism border-white/10 text-white rounded-none">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="font-impact text-2xl uppercase flex items-center gap-2">
+                                    <AlertTriangle className="text-destructive" /> REMOVER CLIENTE?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription className="text-white/60 uppercase text-[10px] font-black tracking-widest">
+                                    Esta ação removerá o cliente da base CRM. Se houver pedidos vinculados, a exclusão poderá falhar.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="bg-white/5 border-white/10 text-white uppercase text-[10px] font-black rounded-none">VOLTAR</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteCustomer(customer.id)} className="bg-destructive text-white uppercase text-[10px] font-black rounded-none hover:bg-destructive/80">CONFIRMAR REMOÇÃO</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
