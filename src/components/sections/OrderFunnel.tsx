@@ -75,7 +75,7 @@ export function OrderFunnel() {
       toast({
         variant: "destructive",
         title: "ERRO DE CONEXÃO",
-        description: error.message || "Tente novamente em alguns instantes."
+        description: error.message || "Verifique as configurações de RLS no Supabase."
       })
     } finally {
       setIsSubmitting(false)
@@ -86,7 +86,7 @@ export function OrderFunnel() {
     <section id="order-form" className="py-24 container px-4">
       <div className="grid lg:grid-cols-2 gap-12 items-center">
         <div className="space-y-6">
-          <h2 className="font-impact text-7xl text-white uppercase leading-[0.85]">
+          <h2 className="font-impact text-7xl text-white uppercase leading-[0.85] tracking-tighter">
             MÁQUINA DE <br/><span className="text-primary neon-text-green">PEDIDOS ATIVA</span>
           </h2>
           <p className="text-xl text-white/70 max-w-md font-light">
@@ -94,45 +94,66 @@ export function OrderFunnel() {
           </p>
         </div>
 
-        <Card className="glass-morphism border-primary/20 relative overflow-hidden group shadow-2xl rounded-none">
-          <div className="absolute top-0 left-0 w-full h-1 bg-primary/40 animate-scan z-20" />
-          <CardHeader className="pb-8">
-            <CardTitle className="font-impact text-4xl text-white uppercase">{isSuccess ? "REGISTRADO" : "PEDIR AGORA"}</CardTitle>
-            <CardDescription className="text-white/40 uppercase text-[10px] tracking-[0.3em] font-black">SISTEMA INTEGRADO MAZAGÃO</CardDescription>
+        <Card className="bg-[#0a0c1a]/80 backdrop-blur-xl border border-white/5 relative overflow-hidden group shadow-2xl rounded-none">
+          <div className="absolute top-0 left-0 w-full h-1 bg-primary/60 animate-scan z-20" />
+          <CardHeader className="pb-8 border-b border-white/5">
+            <CardTitle className="font-impact text-5xl text-white uppercase tracking-tight">{isSuccess ? "REGISTRADO" : "PEDIR AGORA"}</CardTitle>
+            <CardDescription className="text-white/40 uppercase text-[10px] tracking-[0.3em] font-black mt-2">SISTEMA INTEGRADO MAZAGÃO</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-8">
             {isSuccess ? (
               <div className="py-12 flex flex-col items-center text-center space-y-6">
                 <CheckCircle2 className="h-16 w-16 text-primary animate-bounce" />
-                <h3 className="text-3xl font-impact text-white">REDIRECIONANDO...</h3>
-                <NeonButton className="w-full h-16" variant="green" onClick={() => window.location.assign(whatsappUrl)}><MessageCircle className="mr-2" /> ABRIR WHATSAPP</NeonButton>
+                <h3 className="text-3xl font-impact text-white uppercase">REDIRECIONANDO...</h3>
+                <NeonButton className="w-full h-16 rounded-none text-xl" variant="green" onClick={() => window.location.assign(whatsappUrl)}>
+                  <MessageCircle className="mr-2 h-6 w-6" /> ABRIR WHATSAPP
+                </NeonButton>
               </div>
             ) : (
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                   <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white/80 uppercase text-[10px] font-black">NOME COMPLETO</FormLabel>
-                      <FormControl><Input placeholder="Seu Nome" className="bg-white text-black h-14 font-bold border-none rounded-none" {...field} /></FormControl>
-                      <FormMessage />
+                    <FormItem className="space-y-3">
+                      <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">NOME COMPLETO</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Seu Nome" 
+                          className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="phone" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white/80 uppercase text-[10px] font-black">WHATSAPP</FormLabel>
-                      <FormControl><Input placeholder="1399..." className="bg-white text-black h-14 font-bold border-none rounded-none" {...field} /></FormControl>
-                      <FormMessage />
+                    <FormItem className="space-y-3">
+                      <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">WHATSAPP</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="1399..." 
+                          className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white/80 uppercase text-[10px] font-black">E-MAIL</FormLabel>
-                      <FormControl><Input placeholder="email@exemplo.com" className="bg-white text-black h-14 font-bold border-none rounded-none" {...field} /></FormControl>
-                      <FormMessage />
+                    <FormItem className="space-y-3">
+                      <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">E-MAIL</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="email@exemplo.com" 
+                          className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
                     </FormItem>
                   )} />
-                  <NeonButton type="submit" className="w-full h-16 rounded-none" variant="green" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Send className="mr-2" />} FINALIZAR PEDIDO
+                  <NeonButton type="submit" className="w-full h-16 rounded-none text-xl font-impact group" variant="green" disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="animate-spin h-6 w-6" /> : <Send className="mr-3 h-6 w-6 group-hover:translate-x-1 transition-transform" />} 
+                    FINALIZAR PEDIDO
                   </NeonButton>
                 </form>
               </Form>
