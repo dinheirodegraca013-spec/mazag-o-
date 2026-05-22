@@ -38,27 +38,27 @@ export function OrderFunnel() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Registrar no novo esquema (Customer -> Order)
-      await createOrder({
+      // 1. Criar Ordem via Server Action
+      const order = await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,
-        notes: "Pedido captado via Site Mazagão",
+        notes: "Captado via Site Mazagão Gás",
         total: 115.00
       })
 
-      // 2. IA para Personalização
-      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}. Gostaria de pedir um P13 Prata.`
+      // 2. Gerar Mensagem (com fallback se a IA falhar)
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}. Gostaria de pedir um Gás P13 Prata.`
       try {
         const response = await generatePersonalizedWhatsAppOrderMessage({
           customerName: values.name,
           customerPhone: values.phone,
           customerEmail: values.email,
-          productName: "P13 Prata"
+          productName: "Gás P13 Prata"
         })
         if (response?.whatsappMessage) finalMessage = response.whatsappMessage
       } catch (e) {
-        console.warn("Usando fallback padrão.")
+        console.warn("IA indisponível. Usando mensagem padrão.")
       }
 
       const encodedMsg = encodeURIComponent(finalMessage)
@@ -67,15 +67,17 @@ export function OrderFunnel() {
       setWhatsappUrl(url)
       setIsSuccess(true)
       
+      // Auto redirecionamento
       setTimeout(() => {
         window.location.assign(url)
-      }, 1500)
+      }, 2000)
 
     } catch (error: any) {
+      console.error("Erro ao processar pedido:", error)
       toast({
         variant: "destructive",
-        title: "ERRO DE CONEXÃO",
-        description: error.message || "Verifique as configurações de RLS no Supabase."
+        title: "SISTEMA INDISPONÍVEL",
+        description: "A Central de Comando está em manutenção. Tente novamente em instantes."
       })
     } finally {
       setIsSubmitting(false)
@@ -117,7 +119,7 @@ export function OrderFunnel() {
                       <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">NOME COMPLETO</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="Seu Nome" 
+                          placeholder="Ex: João da Silva" 
                           className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
                           {...field} 
                         />
@@ -125,35 +127,46 @@ export function OrderFunnel() {
                       <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
                     </FormItem>
                   )} />
-                  <FormField control={form.control} name="phone" render={({ field }) => (
-                    <FormItem className="space-y-3">
-                      <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">WHATSAPP</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="1399..." 
-                          className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem className="space-y-3">
-                      <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">E-MAIL</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="email@exemplo.com" 
-                          className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
-                    </FormItem>
-                  )} />
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <FormField control={form.control} name="phone" render={({ field }) => (
+                      <FormItem className="space-y-3">
+                        <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">WHATSAPP</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="(13) 99999-9999" 
+                            className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="email" render={({ field }) => (
+                      <FormItem className="space-y-3">
+                        <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">E-MAIL</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="seu@email.com" 
+                            className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage className="text-[10px] font-bold uppercase text-red-500" />
+                      </FormItem>
+                    )} />
+                  </div>
                   <NeonButton type="submit" className="w-full h-16 rounded-none text-xl font-impact group" variant="green" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="animate-spin h-6 w-6" /> : <Send className="mr-3 h-6 w-6 group-hover:translate-x-1 transition-transform" />} 
-                    FINALIZAR PEDIDO
+                    {isSubmitting ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="animate-spin h-6 w-6" />
+                        <span>PROCESSANDO...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <Send className="mr-3 h-6 w-6 group-hover:translate-x-1 transition-transform" /> 
+                        <span>FINALIZAR PEDIDO</span>
+                      </div>
+                    )}
                   </NeonButton>
                 </form>
               </Form>

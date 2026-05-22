@@ -14,14 +14,15 @@ const isValidUrl = (url: string | undefined): url is string => {
 }
 
 /**
- * Server-side Supabase Client para SSR com Mock Fallback.
+ * Server-side Supabase Client for SSR with robust Mock Fallback.
  */
 export async function createClient() {
-  const cookieStore = await cookies()
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+  // Mock Fallback if variables are missing to prevent 500 errors
   if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
+    console.warn("Supabase variables missing. Using Mock Client.")
     return {
       auth: {
         getUser: async () => ({ data: { user: null }, error: null }),
@@ -29,16 +30,16 @@ export async function createClient() {
         signInWithPassword: async () => ({ data: null, error: null }),
         signOut: async () => ({ error: null }),
       },
-      from: () => ({
+      from: (table: string) => ({
         select: () => ({
           eq: () => ({
             single: () => Promise.resolve({ data: null, error: null }),
             maybeSingle: () => Promise.resolve({ data: null, error: null }),
           }),
-          order: () => Promise.resolve({ data: [], error: null }),
           or: () => ({
             maybeSingle: () => Promise.resolve({ data: null, error: null }),
           }),
+          order: () => Promise.resolve({ data: [], error: null }),
         }),
         insert: () => ({
           select: () => ({
@@ -55,6 +56,8 @@ export async function createClient() {
     } as any
   }
 
+  const cookieStore = await cookies()
+
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
@@ -66,7 +69,7 @@ export async function createClient() {
             cookieStore.set(name, value, options)
           )
         } catch {
-          // Ignorado se chamado de Server Component
+          // Ignore if called from Server Component
         }
       },
     },
