@@ -29,7 +29,11 @@ import {
   MapPin,
   Pencil,
   History,
-  FileText
+  FileText,
+  BarChart3,
+  Flame,
+  TrendingUp,
+  Clock
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -51,8 +55,11 @@ import { getCustomerByPhone } from "@/services/customers/get-customer-by-phone"
 import { createOrder } from "@/services/order-service"
 import { updateOrder } from "@/services/orders/update-order"
 import { updateCustomer } from "@/services/customers/update-customer"
+import { analyzeNeighborhoodDemand } from "@/ai/flows/neighborhood-analysis-flow"
 import { Database } from "@/types/database"
 import { Button } from "@/components/ui/button"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from "recharts"
 
 type OrderStatus = Database['public']['Tables']['orders']['Row']['status']
 
@@ -72,6 +79,11 @@ export default function AdminDashboard() {
   const [isEditCustomerOpen, setIsEditCustomerOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [isSearchingCustomer, setIsSearchingCustomer] = React.useState(false)
+  
+  // Estados para Gráficos
+  const [isAnalyzingDemand, setIsAnalyzingDemand] = React.useState(false)
+  const [neighborhoodData, setNeighborhoodData] = React.useState<any[]>([])
+  const [aiInsights, setAiInsights] = React.useState("")
   
   const supabase = createClient()
 
@@ -103,6 +115,49 @@ export default function AdminDashboard() {
     checkAccess()
   }, [router, supabase])
 
+  // IA: Análise de Bairros (Mapa de Calor)
+  const runDemandAnalysis = React.useCallback(async () => {
+    if (orders.length === 0) return
+    setIsAnalyzingDemand(true)
+    try {
+      const addresses = orders.map(o => o.notes || "").filter(a => a.length > 5)
+      const analysis = await analyzeNeighborhoodDemand({ addresses })
+      setNeighborhoodData(analysis.neighborhoods)
+      setAiInsights(analysis.insights)
+      toast({ title: "ANÁLISE CONCLUÍDA", description: "Mapa de calor de demanda atualizado." })
+    } catch (err) {
+      console.error(err)
+      toast({ variant: "destructive", title: "FALHA NA IA", description: "Não foi possível processar o mapa de calor." })
+    } finally {
+      setIsAnalyzingDemand(false)
+    }
+  }, [orders, toast])
+
+  React.useEffect(() => {
+    if (activeTab === 'charts' && neighborhoodData.length === 0) {
+      runDemandAnalysis()
+    }
+  }, [activeTab, neighborhoodData.length, runDemandAnalysis])
+
+  const stats = React.useMemo(() => {
+    return {
+      totalOrders: orders.length,
+      totalCustomers: customers.length,
+      pending: orders.filter(o => o.status === 'pending').length,
+      revenue: orders.reduce((acc, curr) => acc + (curr.total || 0), 0)
+    }
+  }, [orders, customers])
+
+  // Dados de Horário de Pico
+  const hourlyData = React.useMemo(() => {
+    const hours = Array.from({ length: 24 }, (_, i) => ({ hour: `${i}h`, count: 0 }))
+    orders.forEach(o => {
+      const h = new Date(o.created_at).getHours()
+      hours[h].count++
+    })
+    return hours.filter(h => h.count > 0 || (parseInt(h.hour) >= 8 && parseInt(h.hour) <= 22))
+  }, [orders])
+
   const handlePhoneChange = async (val: string) => {
     setNewOrder(prev => ({ ...prev, phone: val }))
     if (val.length >= 10) {
@@ -120,32 +175,6 @@ export default function AdminDashboard() {
       setIsSearchingCustomer(false)
     }
   }
-
-  const stats = React.useMemo(() => {
-    return {
-      totalOrders: orders.length,
-      totalCustomers: customers.length,
-      pending: orders.filter(o => o.status === 'pending').length,
-      revenue: orders.reduce((acc, curr) => acc + (curr.total || 0), 0)
-    }
-  }, [orders, customers])
-
-  const filteredOrders = React.useMemo(() => {
-    if (!searchTerm) return orders
-    return orders.filter(o => 
-      o.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.id.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }, [orders, searchTerm])
-
-  const filteredCustomers = React.useMemo(() => {
-    if (!searchTerm) return customers
-    return customers.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }, [customers, searchTerm])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -311,6 +340,7 @@ export default function AdminDashboard() {
           <SidebarMenu className="px-6 space-y-2">
             {[
               { label: 'Painel', id: 'overview', icon: <LayoutDashboard className="h-4 w-4" /> },
+              { label: 'Gráficos', id: 'charts', icon: <BarChart3 className="h-4 w-4" /> },
               { label: 'Pedidos', id: 'orders', icon: <ShoppingBag className="h-4 w-4" /> },
               { label: 'Clientes', id: 'customers', icon: <Users className="h-4 w-4" /> },
             ].map((item) => (
@@ -344,7 +374,7 @@ export default function AdminDashboard() {
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-12 gap-6">
           <div className="space-y-1">
             <h1 className="font-impact text-4xl md:text-6xl text-white uppercase tracking-tighter">
-              {activeTab === 'overview' ? 'PAINEL DE CONTROLE' : activeTab === 'orders' ? 'GERENCIAR PEDIDOS' : 'BASE DE CLIENTES'}
+              {activeTab === 'overview' ? 'PAINEL DE CONTROLE' : activeTab === 'orders' ? 'GERENCIAR PEDIDOS' : activeTab === 'charts' ? 'INTELIGÊNCIA IA' : 'BASE DE CLIENTES'}
             </h1>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">OPERACIONAL ATIVO</Badge>
@@ -353,13 +383,15 @@ export default function AdminDashboard() {
           </div>
           
           <div className="flex flex-wrap gap-3">
-            {activeTab !== 'overview' && (
+            {activeTab === 'charts' && (
               <Button 
                 variant="outline" 
-                className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-white/10"
-                onClick={() => exportToCSV(activeTab === 'orders' ? orders : customers, activeTab)}
+                className="bg-primary/10 border-primary/20 text-primary rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-primary/20"
+                onClick={runDemandAnalysis}
+                disabled={isAnalyzingDemand}
               >
-                <Download className="mr-2 h-4 w-4" /> EXPORTAR CSV
+                {isAnalyzingDemand ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrendingUp className="mr-2 h-4 w-4" />} 
+                ATUALIZAR ANÁLISE IA
               </Button>
             )}
 
@@ -450,6 +482,83 @@ export default function AdminDashboard() {
                     ))}
                   </TableBody>
                 </Table>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'charts' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Mapa de Calor de Bairros */}
+              <Card className="glass-morphism border-white/5 rounded-none p-6">
+                <CardHeader className="px-0 pt-0 pb-6 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
+                      <Flame className="text-primary h-6 w-6" /> MAPA DE CALOR: DEMANDA
+                    </CardTitle>
+                    <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Concentração de pedidos por região em Guarujá</p>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-0 h-[350px]">
+                  {isAnalyzingDemand ? (
+                    <div className="h-full flex flex-col items-center justify-center space-y-4">
+                      <Loader2 className="h-12 w-12 text-primary animate-spin" />
+                      <p className="text-[10px] font-black text-primary uppercase animate-pulse">IA Analisando Endereços...</p>
+                    </div>
+                  ) : neighborhoodData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={neighborhoodData} layout="vertical" margin={{ left: 20, right: 40 }}>
+                        <XAxis type="number" hide />
+                        <YAxis 
+                          dataKey="name" 
+                          type="category" 
+                          width={100} 
+                          axisLine={false} 
+                          tickLine={false}
+                          tick={{ fill: 'white', fontSize: 10, fontWeight: 'bold' }}
+                        />
+                        <Tooltip 
+                          cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
+                          content={<ChartTooltipContent hideLabel />} 
+                        />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                          {neighborhoodData.map((entry, index) => (
+                            <Cell key={index} fill={entry.intensity > 70 ? '#b8ff00' : entry.intensity > 30 ? '#1d22d8' : '#333'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-white/20 uppercase font-black text-xs">Sem dados para análise</div>
+                  )}
+                </CardContent>
+                {aiInsights && (
+                  <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-none">
+                    <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">Insight Estratégico IA:</p>
+                    <p className="text-xs text-white/80 italic">"{aiInsights}"</p>
+                  </div>
+                )}
+              </Card>
+
+              {/* Gráfico de Horários de Pico */}
+              <Card className="glass-morphism border-white/5 rounded-none p-6">
+                <CardHeader className="px-0 pt-0 pb-6">
+                  <CardTitle className="font-impact text-2xl text-white uppercase flex items-center gap-2">
+                    <Clock className="text-secondary h-6 w-6" /> PICOS DE OPERAÇÃO
+                  </CardTitle>
+                  <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Distribuição de pedidos por hora do dia</p>
+                </CardHeader>
+                <CardContent className="px-0 h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={hourlyData} margin={{ top: 20, bottom: 20 }}>
+                      <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                      <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} content={<ChartTooltipContent hideLabel />} />
+                      <Bar dataKey="count" fill="#1d22d8" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
               </Card>
             </div>
           </div>
