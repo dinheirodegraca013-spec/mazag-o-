@@ -3,7 +3,6 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { supabaseAdmin } from "@/lib/supabase/admin"
-import { Database } from "@/types/database"
 
 export async function createOrder(orderData: {
   customerName: string
@@ -33,7 +32,7 @@ export async function createOrder(orderData: {
           name: orderData.customerName,
           phone: orderData.customerPhone,
           email: orderData.customerEmail,
-          notes: 'Cliente captado via site'
+          notes: 'Cliente captado via sistema'
         })
         .select('id')
         .single()
@@ -50,7 +49,7 @@ export async function createOrder(orderData: {
         status: 'pending',
         total: orderData.total || 115.00,
         subtotal: orderData.total || 115.00,
-        notes: orderData.notes || 'Pedido operacional Mazagão'
+        notes: orderData.notes || 'Operação Mazagão Gás'
       })
       .select()
       .single()
@@ -60,6 +59,6 @@ export async function createOrder(orderData: {
     return order
   } catch (error: any) {
     console.error("Falha na criação da ordem:", error)
-    throw new Error(error.message || "Erro ao registrar no Supabase.")
+    throw new Error(error.message || "Erro ao registrar no banco de dados.")
   }
 }

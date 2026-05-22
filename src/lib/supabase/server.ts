@@ -1,3 +1,4 @@
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/database'
@@ -21,11 +22,12 @@ export async function createClient() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
-    // Mock para evitar erros de servidor durante o protótipo
     return {
       auth: {
         getUser: async () => ({ data: { user: null }, error: null }),
         getSession: async () => ({ data: { session: null }, error: null }),
+        signInWithPassword: async () => ({ data: null, error: null }),
+        signOut: async () => ({ error: null }),
       },
       from: () => ({
         select: () => ({
@@ -34,6 +36,9 @@ export async function createClient() {
             maybeSingle: () => Promise.resolve({ data: null, error: null }),
           }),
           order: () => Promise.resolve({ data: [], error: null }),
+          or: () => ({
+            maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          }),
         }),
         insert: () => ({
           select: () => ({
@@ -43,6 +48,7 @@ export async function createClient() {
             })
           })
         }),
+        update: () => ({ eq: () => Promise.resolve({ error: null }) }),
         rpc: () => Promise.resolve({ data: null, error: null })
       }),
       rpc: () => Promise.resolve({ data: null, error: null })
