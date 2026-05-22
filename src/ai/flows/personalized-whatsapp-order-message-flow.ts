@@ -31,23 +31,15 @@ const personalizedWhatsAppOrderMessagePrompt = ai.definePrompt({
   name: 'personalizedWhatsAppOrderMessagePrompt',
   input: {schema: PersonalizedWhatsAppOrderMessageInputSchema},
   output: {schema: PersonalizedWhatsAppOrderMessageOutputSchema},
-  prompt: `You are an AI assistant for Mazagão Gás, focused on generating highly personalized WhatsApp messages for customers.
-Your goal is to make initiating an order as quick and effortless as possible.
+  prompt: `You are an AI assistant for Mazagão Gás. Generate a professional and direct WhatsApp message for a customer.
 
-Generate a WhatsApp message for a customer based on the provided information. The message should be friendly and encourage the customer to complete their order.
+The message must strictly follow this structure:
+"Olá, vim pelo site da Mazagão Gás. Meu nome é {{{customerName}}}, meu e-mail é {{{customerEmail}}} e meu telefone é {{{customerPhone}}}. Gostaria de pedir um Gás P13 Prata agora mesmo."
 
-Customer Information:
-Name: {{{customerName}}}
-Phone: {{{customerPhone}}}
-E-mail: {{{customerEmail}}}
-{{#if productName}}Product Viewed: {{{productName}}}{{/if}}
-
-Your message should start with "Olá, vim pelo site da Mazagão Gás."
-Then, include the customer's name, phone, and email.
-If a product name is provided, subtly suggest it in the message.
-
-Example Output format:
-whatsappMessage: "Olá, vim pelo site da Mazagão Gás. Meu nome é [Nome], meu telefone é [Telefone] e meu e-mail é [Email]. Gostaria de saber mais sobre [Produto]."
+Guidelines:
+- Do not add extra conversational filler.
+- Keep the tone professional and operational.
+- Use the customer's real name, email, and phone provided.
 `,
 });
 

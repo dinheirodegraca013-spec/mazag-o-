@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -38,8 +37,8 @@ export function OrderFunnel() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true)
     try {
-      // 1. Criar Ordem via Server Action
-      const order = await createOrder({
+      // 1. Registrar Ordem no Banco (Server Action)
+      await createOrder({
         customerName: values.name,
         customerPhone: values.phone,
         customerEmail: values.email,
@@ -47,8 +46,10 @@ export function OrderFunnel() {
         total: 115.00
       })
 
-      // 2. Gerar Mensagem (com fallback se a IA falhar)
-      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}. Gostaria de pedir um Gás P13 Prata.`
+      // 2. Gerar Mensagem Refinada
+      // Fallback robusto se a IA falhar
+      let finalMessage = `Olá, vim pelo site da Mazagão Gás. Meu nome é ${values.name}, meu e-mail é ${values.email} e meu telefone é ${values.phone}. Gostaria de pedir um Gás P13 Prata agora mesmo.`
+      
       try {
         const response = await generatePersonalizedWhatsAppOrderMessage({
           customerName: values.name,
@@ -67,17 +68,17 @@ export function OrderFunnel() {
       setWhatsappUrl(url)
       setIsSuccess(true)
       
-      // Auto redirecionamento
+      // Redirecionamento automático
       setTimeout(() => {
         window.location.assign(url)
-      }, 2000)
+      }, 1500)
 
     } catch (error: any) {
       console.error("Erro ao processar pedido:", error)
       toast({
         variant: "destructive",
         title: "SISTEMA INDISPONÍVEL",
-        description: "A Central de Comando está em manutenção. Tente novamente em instantes."
+        description: "Falha na conexão com a central. Tente novamente em instantes."
       })
     } finally {
       setIsSubmitting(false)
@@ -119,7 +120,7 @@ export function OrderFunnel() {
                       <FormLabel className="text-white/60 uppercase text-[10px] font-black tracking-widest">NOME COMPLETO</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="Ex: João da Silva" 
+                          placeholder="Ex: Guilherme Cabanas Vazquez" 
                           className="bg-white text-black h-14 font-bold border-none rounded-none text-lg focus-visible:ring-primary ring-offset-0" 
                           {...field} 
                         />
