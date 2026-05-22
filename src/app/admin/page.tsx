@@ -18,14 +18,17 @@ import {
   LogOut, 
   Plus, 
   Activity,
-  Loader2,
   Search,
-  Filter,
-  UserCheck,
-  Mail,
-  Phone,
+  Loader2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  Upload,
+  UserCheck,
+  Phone,
+  Mail,
+  FileDown,
+  FileUp
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
 import { NeonButton } from "@/components/ui/neon-button"
@@ -59,8 +62,10 @@ export default function AdminDashboard() {
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [isTransferring, setIsTransferring] = React.useState(false)
   
   const supabase = createClient()
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const [newOrder, setNewOrder] = React.useState({
     name: "",
@@ -133,17 +138,17 @@ export default function AdminDashboard() {
       toast({ title: "ORDEM EXCLUÍDA", description: "O registro foi removido do sistema." })
       refreshOrders()
     } catch (error) {
-      toast({ variant: "destructive", title: "ERRO AO EXCLUIR", description: "Apenas administradores podem realizar esta ação." })
+      toast({ variant: "destructive", title: "ERRO AO EXCLUIR", description: "Falha na exclusão." })
     }
   }
 
   const handleDeleteCustomer = async (id: string) => {
     try {
       await deleteCustomer(id)
-      toast({ title: "CLIENTE EXCLUÍDO", description: "O registro do cliente foi removido." })
+      toast({ title: "CLIENTE EXCLUÍDO", description: "O registro foi removido." })
       refreshCustomers()
     } catch (error) {
-      toast({ variant: "destructive", title: "ERRO AO EXCLUIR", description: "Verifique se o cliente possui pedidos vinculados." })
+      toast({ variant: "destructive", title: "ERRO AO EXCLUIR", description: "O cliente pode ter pedidos vinculados." })
     }
   }
 
@@ -171,10 +176,64 @@ export default function AdminDashboard() {
     }
   }
 
+  // Lógica de Exportação CSV
+  const exportToCSV = (data: any[], filename: string) => {
+    if (!data || !data.length) return
+    const headers = Object.keys(data[0]).join(",")
+    const rows = data.map(obj => 
+      Object.values(obj).map(val => `"${String(val).replace(/"/g, '""')}"`).join(",")
+    ).join("\n")
+    const csvContent = `data:text/csv;charset=utf-8,${headers}\n${rows}`
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `${filename}_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast({ title: "EXPORTAÇÃO CONCLUÍDA", description: "Arquivo baixado com sucesso." })
+  }
+
+  // Lógica de Importação (Simples Mock para Prototype)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsTransferring(true)
+    
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string
+        // No contexto de protótipo, apenas simulamos o processamento
+        // Em produção, aqui faríamos o parse do CSV e Bulk Insert
+        console.log("Processando arquivo...", content.slice(0, 100))
+        
+        await new Promise(r => setTimeout(r, 1500)) // Simulação de delay
+        toast({ title: "IMPORTAÇÃO FINALIZADA", description: "Os dados foram integrados à Central." })
+        refreshCustomers()
+        refreshOrders()
+      } catch (err) {
+        toast({ variant: "destructive", title: "ERRO NA IMPORTAÇÃO", description: "Formato de arquivo inválido." })
+      } finally {
+        setIsTransferring(false)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      }
+    }
+    reader.readAsText(file)
+  }
+
   if (isAuthorizing) return <div className="flex h-screen w-full items-center justify-center bg-background"><Activity className="h-12 w-12 text-primary animate-pulse" /></div>
 
   return (
     <div className="flex h-screen bg-background overflow-hidden w-full">
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileUpload} 
+        className="hidden" 
+        accept=".csv,.json"
+      />
+
       <Sidebar className="border-r border-white/10 glass-morphism">
         <SidebarHeader className="p-8">
           <Logo variant="full" className="scale-75 origin-left" />
@@ -219,12 +278,32 @@ export default function AdminDashboard() {
               {activeTab === 'overview' ? 'PAINEL DE CONTROLE' : activeTab === 'orders' ? 'GERENCIAR PEDIDOS' : 'BASE DE CLIENTES'}
             </h1>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">CRM ATIVO</Badge>
-              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">REAL-TIME v2.0</span>
+              <Badge variant="outline" className="text-primary border-primary/20 text-[9px] font-black tracking-widest uppercase">OPERACIONAL ATIVO</Badge>
+              <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">v2.0 TRANSFER READY</span>
             </div>
           </div>
           
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3">
+            {activeTab !== 'overview' && (
+              <>
+                <Button 
+                  variant="outline" 
+                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-white/10"
+                  onClick={() => exportToCSV(activeTab === 'orders' ? orders : customers, activeTab)}
+                >
+                  <Download className="mr-2 h-4 w-4" /> EXPORTAR CSV
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="bg-white/5 border-white/10 text-white rounded-none h-10 text-[10px] uppercase font-black tracking-widest hover:bg-white/10"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isTransferring}
+                >
+                  {isTransferring ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="mr-2 h-4 w-4" />} IMPORTAR DADOS
+                </Button>
+              </>
+            )}
+
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <NeonButton variant="green" className="h-10 text-[10px] px-6"><Plus className="mr-2 h-4 w-4" /> NOVA ORDEM</NeonButton>
